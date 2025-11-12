@@ -29,8 +29,8 @@ class VolcEngineAI:
         """初始化各个功能模块的客户端"""
         # 延迟导入，避免循环依赖
         try:
-            from src.core.volcengine_avatar_client import VolcEngineAvatarClient
-            self._avatar_client = VolcEngineAvatarClient(self.access_key, self.secret_key)
+            from src.core.video_audio_driven_client import VideoAudioDrivenClient
+            self._avatar_client = VideoAudioDrivenClient(self.access_key, self.secret_key)
         except ImportError:
             self._avatar_client = None
 
@@ -109,6 +109,13 @@ class VolcEngineAI:
     def video_generation(self, prompt: str, **kwargs):
         """视频生成 - 待实现"""
         raise NotImplementedError("视频生成功能待实现")
+
+    def generate_effect_video(self, image_url: str, template_id: str, **kwargs):
+        """生成创意特效视频"""
+        # 延迟导入，避免循环依赖
+        from src.core.video_effect_client import VideoEffectClient
+        client = VideoEffectClient(self.access_key, self.secret_key)
+        return client.generate_video_from_image(image_url, template_id, **kwargs)
 
 
 def create_avatar(args):
@@ -285,6 +292,209 @@ def use_latest_avatar(args):
         print(f"❌ 生成失败: {str(e)}")
 
 
+def generate_effect_video(args):
+    """生成创意特效视频"""
+    ai = VolcEngineAI()
+    try:
+        print(f"🎨 开始生成创意特效视频...")
+        print(f"📷 图片URL: {args.image_url}")
+        print(f"🎭 模板ID: {args.template_id}")
+
+        # 检查是否为双图模板并给出提示
+        v1_dual_templates = ["double_embrace", "double_embrace_720p"]
+        v2_dual_templates = ["french_kiss_dual_version", "french_kiss_dual_version_720p"]
+        all_dual_templates = v1_dual_templates + v2_dual_templates
+
+        if args.template_id in all_dual_templates:
+            if "|" not in args.image_url:
+                version = "V1" if args.template_id in v1_dual_templates else "V2"
+                print(f"💕 提示: {version}版本模板 '{args.template_id}' 需要两张图片")
+                print(f"   请使用以下格式: --image-url '图片1.jpg|图片2.jpg'")
+
+        result = ai.generate_effect_video(
+            image_url=args.image_url,
+            template_id=args.template_id,
+            final_stitch_switch=args.final_stitch_switch
+        )
+
+        # 检查返回结果类型
+        if isinstance(result, dict):
+            # 完整流程的结果（包含视频URL）
+            task_id = result.get('task_id')
+            video_url = result.get('video_url')
+            print(f"🎉 特效视频生成完成！")
+            print(f"🆔 任务ID: {task_id}")
+            print(f"📹 视频URL: {video_url}")
+            print("💡 可以使用以下命令下载视频:")
+            print(f"   python volcengine_ai.py query-effect-video --task-id {task_id} --download")
+        else:
+            # 仅提交任务的结果（任务ID）
+            print(f"✅ 特效视频任务已提交")
+            print(f"🆔 任务ID: {result}")
+            print("💡 可以使用以下命令查询状态:")
+            print(f"   python volcengine_ai.py query-effect-video --task-id {result}")
+    except Exception as e:
+        print(f"❌ 生成失败: {str(e)}")
+        if "两张图片链接" in str(e):
+            print("💡 双图模板使用示例:")
+            print("   V1版本: python volcengine_ai.py generate-effect-video --image-url 'https://person1.jpg|https://person2.jpg' --template-id double_embrace")
+            print("   V2版本: python volcengine_ai.py generate-effect-video --image-url 'https://person1.jpg|https://person2.jpg' --template-id french_kiss_dual_version")
+
+
+def query_effect_video(args):
+    """查询特效视频状态"""
+    ai = VolcEngineAI()
+    try:
+        from src.core.video_effect_client import VideoEffectClient
+        client = VideoEffectClient(ai.access_key, ai.secret_key)
+
+        print(f"🔍 查询特效视频任务ID: {args.task_id}")
+
+        result = client.get_result(args.task_id)
+
+        if result.get("status") == "done":
+            resp_data = result.get("resp_data", {})
+            if "video_url" in resp_data:
+                print(f"✅ 特效视频生成成功！")
+                print(f"📹 视频URL: {resp_data['video_url']}")
+
+                # 自动下载视频
+                if args.download:
+                    video_url = resp_data['video_url']
+                    filename = args.filename or f"effect_video_{args.task_id}.mp4"
+                    download_video(video_url, filename)
+                return
+        else:
+            status = result.get("status", "unknown")
+
+            # 根据状态显示具体信息
+            if status == "in_queue":
+                print(f"🔄 任务排队中")
+            elif status == "generating":
+                print(f"⚡ 正在处理中")
+                print("💡 提示: 通常需要3-10分钟，请耐心等待")
+            elif status == "not_found":
+                print(f"❌ 任务未找到")
+                print("💡 请检查任务ID是否正确")
+            elif status == "expired":
+                print(f"⏰ 任务已过期")
+                print("💡 任务有效期为12小时，过期后需要重新提交")
+            else:
+                print(f"📊 任务状态: {status}")
+
+    except Exception as e:
+        print(f"❌ 查询失败: {str(e)}")
+
+
+def list_effect_templates():
+    """列出可用的特效模板"""
+    # V1版本模板
+    v1_templates = {
+        "becoming_doll": "变身玩偶_480p版",
+        "becoming_doll_720p": "变身玩偶_720p版",
+        "all_things_ridability_pig": "召唤坐骑 - 猪_480p版",
+        "all_things_ridability_pig_720p": "召唤坐骑 - 猪_720p版",
+        "all_things_ridability_tiger": "召唤坐骑 - 老虎_480p版",
+        "all_things_ridability_tiger_720p": "召唤坐骑 - 老虎_720p版",
+        "all_things_ridability_loong": "召唤坐骑 - 龙_480p版",
+        "all_things_ridability_loong_720p": "召唤坐骑 - 龙_720p版",
+        "all_things_bloom_with_flowers": "万物生花_480p版",
+        "all_things_bloom_with_flowers_720p": "万物生花_720p版",
+        "double_embrace_single_person": "爱的拥抱（单图）_480p版",
+        "double_embrace_single_person_720p": "爱的拥抱（单图）_720p版",
+        "double_embrace": "爱的拥抱（双图）_480p版",
+        "double_embrace_720p": "爱的拥抱（双图）_720p版",
+        "beauty_surround": "AI美女环绕_480p版",
+        "beauty_surround_720p": "AI美女环绕_720p版",
+        "handsome_man_surround": "AI帅哥环绕_480p版",
+        "handsome_man_surround_720p": "AI帅哥环绕_720p版",
+        "ai_baby": "天赐宝宝_480p版",
+        "ai_baby_720p": "天赐宝宝_720p版"
+    }
+
+    # V2版本模板
+    v2_templates = {
+        "multi_style_stacking_dolls": "emoji小人变身_480p",
+        "fluffy_dream_doll_s2e": "梦幻娃娃变身1_480p",
+        "fluffy_dream_doll_s2e_720p": "梦幻娃娃变身1_720p",
+        "fluffy_dream_doll": "梦幻娃娃变身2_480p",
+        "fluffy_dream_doll_720p": "梦幻娃娃变身2_720p",
+        "my_world": "我的世界风_480p",
+        "my_world_720p": "我的世界风_720p",
+        "crystal_ball": "装进水晶球_480p",
+        "crystal_ball_720p": "装进水晶球_720p",
+        "lying_on_fluffy_belly": "猫星人的守护_480p",
+        "lying_on_fluffy_belly_720p": "猫星人的守护_720p",
+        "angel_figure": "天使手办变身_480p",
+        "angel_figure_720p": "天使手办变身_720p",
+        "felt_keychain": "毛毡钥匙扣变身_480p",
+        "felt_keychain_720p": "毛毡钥匙扣变身_720p",
+        "acrylic_charm": "亚克力挂饰变身_480p",
+        "acrylic_charm_720p": "亚克力挂饰变身_720p",
+        "polaroid": "拍立得风_480p",
+        "polaroid_720p": "拍立得风_720p",
+        "blister_pack_action_figure": "潮玩手办变身_480p",
+        "blister_pack_action_figure_720p": "潮玩手办变身_720p",
+        "french_kiss_dual_version": "法式热吻_双图",
+        "french_kiss_dual_version_720p": "法式热吻_双图_720p",
+        "french_kiss_solo_version": "法式热吻_单图",
+        "french_kiss_solo_version_720p": "法式热吻_单图_720p",
+        "costume_bikini": "变装比基尼",
+        "costume_bikini_720p": "变装比基尼_720p",
+        "hot_dance": "热舞",
+        "hot_dance_720p": "热舞_720p",
+        "transform_into_mermaid": "变身美人鱼",
+        "transform_into_mermaid_720p": "变身美人鱼_720p"
+    }
+
+    print("🎨 可用的特效模板:")
+    print("=" * 80)
+
+    # V1版本分类
+    v1_categories = {
+        "🎭 V1 - 卡通变身": ["becoming_doll", "becoming_doll_720p"],
+        "🐉 V1 - 召唤坐骑": ["all_things_ridability_pig", "all_things_ridability_pig_720p", "all_things_ridability_tiger", "all_things_ridability_tiger_720p", "all_things_ridability_loong", "all_things_ridability_loong_720p"],
+        "🌸 V1 - 万物生花": ["all_things_bloom_with_flowers", "all_things_bloom_with_flowers_720p"],
+        "💕 V1 - 情感互动": ["double_embrace_single_person", "double_embrace_single_person_720p", "double_embrace", "double_embrace_720p"],
+        "😊 V1 - AI环绕": ["beauty_surround", "beauty_surround_720p", "handsome_man_surround", "handsome_man_surround_720p"],
+        "👶 V1 - 天赐宝宝": ["ai_baby", "ai_baby_720p"]
+    }
+
+    # V2版本分类
+    v2_categories = {
+        "🎭 V2 - 卡通变身": ["multi_style_stacking_dolls", "fluffy_dream_doll_s2e", "fluffy_dream_doll_s2e_720p", "fluffy_dream_doll", "fluffy_dream_doll_720p", "my_world", "my_world_720p", "angel_figure", "angel_figure_720p", "felt_keychain", "felt_keychain_720p", "acrylic_charm", "acrylic_charm_720p", "blister_pack_action_figure", "blister_pack_action_figure_720p"],
+        "💫 V2 - 特效场景": ["crystal_ball", "crystal_ball_720p", "lying_on_fluffy_belly", "lying_on_fluffy_belly_720p", "polaroid", "polaroid_720p"],
+        "💕 V2 - 情感互动": ["french_kiss_dual_version", "french_kiss_dual_version_720p", "french_kiss_solo_version", "french_kiss_solo_version_720p"],
+        "👗 V2 - 变装换装": ["costume_bikini", "costume_bikini_720p", "transform_into_mermaid", "transform_into_mermaid_720p"],
+        "💃 V2 - 动感舞蹈": ["hot_dance", "hot_dance_720p"]
+    }
+
+    print("\n📱 V1版本接口 (20个模板):")
+    print("-" * 40)
+    for category, template_list in v1_categories.items():
+        print(f"\n{category}:")
+        for template_id in template_list:
+            if template_id in v1_templates:
+                print(f"  {template_id}: {v1_templates[template_id]}")
+
+    print("\n🚀 V2版本接口 (29个模板):")
+    print("-" * 40)
+    for category, template_list in v2_categories.items():
+        print(f"\n{category}:")
+        for template_id in template_list:
+            if template_id in v2_templates:
+                print(f"  {template_id}: {v2_templates[template_id]}")
+
+    print(f"\n📝 说明:")
+    print("  - V1和V2版本使用不同的接口，但会自动根据模板ID识别")
+    print("  - 带'_720p'后缀的为高清版本")
+    print("  - V1双图模板: double_embrace 系列，需要用'|'连接两个图片URL")
+    print("  - V2双图模板: french_kiss_dual_version 系列，需要用'|'连接两个图片URL")
+    print("  - V2的emoji小人变身_480p不支持分屏功能")
+    print(f"🎯 模板总数: {len(v1_templates) + len(v2_templates)} 个模板")
+    print("🔍 使用示例: python volcengine_ai.py generate-effect-video --image-url '图片URL' --template-id 模板ID")
+
+
 def generate_all(args):
     """一键生成完整流程"""
     ai = VolcEngineAI()
@@ -363,6 +573,24 @@ def main():
     parser_use_latest.add_argument('--audio-url', required=True, help='音频URL')
     parser_use_latest.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='指定模式的最新形象')
     parser_use_latest.set_defaults(func=use_latest_avatar)
+
+    # 生成特效视频
+    parser_effect = subparsers.add_parser('generate-effect-video', help='生成创意特效视频')
+    parser_effect.add_argument('--image-url', required=True, help='图片URL')
+    parser_effect.add_argument('--template-id', required=True, help='特效模板ID')
+    parser_effect.add_argument('--final-stitch-switch', type=bool, default=True, help='分屏设置 (false: 开启上下分屏, true: 关闭分屏)')
+    parser_effect.set_defaults(func=generate_effect_video)
+
+    # 查询特效视频状态
+    parser_query_effect = subparsers.add_parser('query-effect-video', help='查询特效视频生成状态')
+    parser_query_effect.add_argument('--task-id', required=True, help='任务ID')
+    parser_query_effect.add_argument('--download', action='store_true', help='下载视频到本地')
+    parser_query_effect.add_argument('--filename', help='保存文件名')
+    parser_query_effect.set_defaults(func=query_effect_video)
+
+    # 列出特效模板
+    parser_list_templates = subparsers.add_parser('list-effect-templates', help='列出可用的特效模板')
+    parser_list_templates.set_defaults(func=lambda args: list_effect_templates())
 
     args = parser.parse_args()
 

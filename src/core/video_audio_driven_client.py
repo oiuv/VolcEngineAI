@@ -15,8 +15,8 @@ from ..utils import retry, validate_url, validate_mode, get_mode_description, ge
 from ..config import DEFAULT_TIMEOUT, MAX_RETRIES, RETRY_DELAY
 
 
-class VolcEngineAvatarClient:
-    """火山引擎单图音频驱动客户端"""
+class VideoAudioDrivenClient:
+    """火山引擎单图音频驱动视频生成客户端"""
 
     def __init__(self, access_key: str, secret_key: str, region: str = "cn-north-1", service: str = "cv"):
         """
@@ -481,7 +481,7 @@ if __name__ == "__main__":
     AUDIO_URL = "https://example.com/audio.mp3"  # 替换为实际的音频URL
 
     # 初始化客户端
-    client = VolcEngineAvatarClient(ACCESS_KEY, SECRET_KEY)
+    client = VideoAudioDrivenClient(ACCESS_KEY, SECRET_KEY)
 
     try:
         # AIGC隐式标识配置（可选）
