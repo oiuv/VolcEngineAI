@@ -195,16 +195,12 @@ class VideoJimengClient:
         except requests.exceptions.ConnectionError:
             raise Exception("网络连接失败，请检查网络设置")
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                raise Exception("认证失败，请检查AccessKey和SecretKey是否正确")
-            elif e.response.status_code == 403:
-                raise Exception("权限不足，请检查账号是否有相应权限")
-            elif e.response.status_code == 429:
-                raise Exception("请求过于频繁，请稍后重试")
-            elif e.response.status_code >= 500:
-                raise Exception("服务器内部错误，请稍后重试")
-            else:
-                raise Exception(f"HTTP请求失败: {e.response.status_code}")
+            # 直接返回API的原始响应
+            try:
+                error_json = e.response.json()
+                raise Exception(f"{error_json}")
+            except:
+                raise Exception(f"{e.response.text}")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API请求失败: {str(e)}")
 

@@ -176,16 +176,12 @@ class VideoAudioDrivenClient:
         except requests.exceptions.ConnectionError:
             raise Exception("网络连接失败，请检查网络设置")
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                raise Exception("认证失败，请检查AccessKey和SecretKey是否正确")
-            elif e.response.status_code == 403:
-                raise Exception("权限不足，请检查账号是否有相应权限")
-            elif e.response.status_code == 429:
-                raise Exception("请求过于频繁，请稍后重试")
-            elif e.response.status_code >= 500:
-                raise Exception("服务器内部错误，请稍后重试")
-            else:
-                raise Exception(f"HTTP请求失败: {e.response.status_code}")
+            # 直接返回API的原始响应
+            try:
+                error_json = e.response.json()
+                raise Exception(f"{error_json}")
+            except:
+                raise Exception(f"{e.response.text}")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API请求失败: {str(e)}")
 
@@ -364,7 +360,6 @@ class VideoAudioDrivenClient:
 
                     if video_url:
                         result["video_url"] = video_url
-                        print(f"视频生成成功！视频URL: {video_url}")
 
                     # 添加视频元数据
                     video_meta = resp_data.get("video", {})
@@ -396,7 +391,7 @@ class VideoAudioDrivenClient:
         """
         start_time = time.time()
 
-        while time.time() - start_time < max_wait_time:
+        while max_wait_time == 0 or time.time() - start_time < max_wait_time:
             try:
                 if operation_type == "role":
                     result = self.get_role_result(task_id, mode)
@@ -405,14 +400,18 @@ class VideoAudioDrivenClient:
                 else:
                     raise ValueError(f"不支持的操作类型: {operation_type}")
 
-                # 检查任务是否完成
-                if result.get("status") == "done":
-                    return result
-                elif result.get("status") in ["not_found", "expired"]:
-                    raise Exception(f"任务异常: {result.get('status')}")
-                elif "resource_id" in result or "video_url" in result:
-                    # 如果返回结果包含resource_id或video_url，说明任务已完成
-                    return result
+                # 检查API响应状态
+                if result.get("code") == 10000:  # API成功
+                    data = result.get("data", {})
+                    status = data.get("status")
+
+                    if status == "done":
+                        return result
+                    elif status in ["not_found", "expired"]:
+                        raise Exception(f"任务异常: {status}")
+                    elif "resource_id" in result or "video_url" in result:
+                        # 如果返回结果包含resource_id或video_url，说明任务已完成
+                        return result
 
                 print(f"任务进行中... 状态: {result.get('status', 'unknown')}")
                 time.sleep(check_interval)
@@ -459,7 +458,8 @@ class VideoAudioDrivenClient:
         # 步骤2：生成视频
         print("步骤2：生成视频...")
         video_task_id = self.generate_video(resource_id, audio_url, mode, aigc_meta)
-        video_result = self.wait_for_completion(video_task_id, mode, "video", max_wait_time=600)
+        # max_wait_time=0 表示无限制等待
+        video_result = self.wait_for_completion(video_task_id, mode, "video", max_wait_time=0 if max_wait_time == 0 else max_wait_time)
 
         print("视频生成完成！")
         return {

@@ -187,16 +187,12 @@ class VideoLipSyncClient:
         except requests.exceptions.ConnectionError:
             raise Exception("网络连接失败，请检查网络设置")
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                raise Exception("认证失败，请检查AccessKey和SecretKey是否正确")
-            elif e.response.status_code == 403:
-                raise Exception("权限不足，请检查账号是否有相应权限")
-            elif e.response.status_code == 429:
-                raise Exception("请求过于频繁，请稍后重试")
-            elif e.response.status_code >= 500:
-                raise Exception("服务器内部错误，请稍后重试")
-            else:
-                raise Exception(f"HTTP请求失败: {e.response.status_code}")
+            # 直接返回API的原始响应
+            try:
+                error_json = e.response.json()
+                raise Exception(f"{error_json}")
+            except:
+                raise Exception(f"{e.response.text}")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API请求失败: {str(e)}")
 
@@ -347,13 +343,18 @@ class VideoLipSyncClient:
             try:
                 result = self.get_lip_sync_result(task_id, mode)
 
-                if result.get("status") == "done":
-                    return result
-                elif result.get("status") in ["not_found", "expired"]:
-                    raise Exception(f"任务异常: {result.get('status')}")
-                elif "video_url" in result:
-                    # 如果返回结果包含video_url，说明任务已完成
-                    return result
+                # 检查API响应状态
+                if result.get("code") == 10000:  # API成功
+                    data = result.get("data", {})
+                    status = data.get("status")
+
+                    if status == "done":
+                        return result
+                    elif status in ["not_found", "expired"]:
+                        raise Exception(f"任务异常: {status}")
+                    elif "video_url" in result:
+                        # 如果返回结果包含video_url，说明任务已完成
+                        return result
 
                 print(f"任务进行中... 状态: {result.get('status', 'unknown')}")
                 time.sleep(check_interval)

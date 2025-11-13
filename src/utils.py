@@ -27,7 +27,7 @@ def retry(max_retries: int = 3, delay: int = 2, exceptions: tuple = (Exception,)
                 except exceptions as e:
                     last_exception = e
                     if attempt < max_retries:
-                        print(f"操作失败，{delay}秒后重试... (尝试 {attempt + 1}/{max_retries + 1})")
+                        print(f"操作失败：{str(e)}，{delay}秒后重试... (尝试 {attempt + 1}/{max_retries + 1})")
                         time.sleep(delay)
                     else:
                         print(f"操作失败，已达到最大重试次数 ({max_retries + 1})")

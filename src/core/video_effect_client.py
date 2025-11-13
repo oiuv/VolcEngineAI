@@ -270,16 +270,12 @@ class VideoEffectClient:
         except requests.exceptions.ConnectionError:
             raise Exception("网络连接失败，请检查网络设置")
         except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 401:
-                raise Exception("认证失败，请检查AccessKey和SecretKey是否正确")
-            elif e.response.status_code == 403:
-                raise Exception("权限不足，请检查账号是否有相应权限")
-            elif e.response.status_code == 429:
-                raise Exception("请求过于频繁，请稍后重试")
-            elif e.response.status_code >= 500:
-                raise Exception("服务器内部错误，请稍后重试")
-            else:
-                raise Exception(f"HTTP请求失败: {e.response.status_code}")
+            # 直接返回API的原始响应
+            try:
+                error_json = e.response.json()
+                raise Exception(f"{error_json}")
+            except:
+                raise Exception(f"{e.response.text}")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API请求失败: {str(e)}")
 
@@ -382,6 +378,9 @@ class VideoEffectClient:
         Returns:
             对应的req_key
         """
+        v2_error = None
+        v1_error = None
+
         # 先尝试V2版本
         try:
             response = self._make_request(
@@ -390,10 +389,9 @@ class VideoEffectClient:
                 "i2v_template_cv_v2",
                 task_id=task_id
             )
-            if response.get("code") == 10000:
-                return "i2v_template_cv_v2"
-        except:
-            pass
+            return f"i2v_template_cv_v2|{response}"
+        except Exception as e:
+            v2_error = e
 
         # 再尝试V1版本
         try:
@@ -403,12 +401,12 @@ class VideoEffectClient:
                 "i2v_bytedance_effects_v1",
                 task_id=task_id
             )
-            if response.get("code") == 10000:
-                return "i2v_bytedance_effects_v1"
-        except:
-            pass
+            return f"i2v_bytedance_effects_v1|{response}"
+        except Exception as e:
+            v1_error = e
 
-        raise ValueError(f"无法确定任务ID {task_id} 对应的接口版本")
+        # 直接抛出原始异常
+        raise Exception(f"V2: {v2_error} | V1: {v1_error}")
 
     @retry(max_retries=3, delay=2)
     def get_result(self, task_id: str, req_key: str = None) -> Dict[str, Any]:
@@ -425,7 +423,18 @@ class VideoEffectClient:
         try:
             # 如果没有提供req_key，尝试自动检测
             if not req_key:
-                req_key = self.get_task_req_key(task_id)
+                req_key_result = self.get_task_req_key(task_id)
+                if "|" in req_key_result:
+                    req_key, response = req_key_result.split("|", 1)
+                    # 尝试解析JSON，如果失败则返回原始响应
+                    try:
+                        return json.loads(response)
+                    except:
+                        # 如果JSON解析失败，说明这可能不是完整的JSON响应
+                        # 或者响应格式有问题，直接用检测到的req_key重新查询
+                        req_key = req_key
+                else:
+                    req_key = req_key_result
 
             response = self._make_request(
                 "POST",
@@ -434,26 +443,13 @@ class VideoEffectClient:
                 task_id=task_id
             )
 
-            if response.get("code") != 10000:
-                raise Exception(f"获取结果失败: {response}")
-
-            data = response["data"]
-            status = data["status"]
-
-            if status == "done":
-                resp_data = json.loads(data["resp_data"])
-                result = {
-                    "status": status,
-                    "resp_data": resp_data
-                }
-                return result
-            else:
-                return {"status": status, "message": f"任务状态: {status}"}
+            # API返回的是JSON格式，直接返回字典对象
+            return response
 
         except Exception as e:
             raise Exception(f"获取结果失败: {str(e)}")
 
-    def wait_for_completion(self, task_id: str, max_wait_time: int = 600, check_interval: int = 15) -> Dict[str, Any]:
+    def wait_for_completion(self, task_id: str, max_wait_time: int = 600, check_interval: int = 15, req_key: str = None) -> Dict[str, Any]:
         """
         等待任务完成
 
@@ -472,16 +468,30 @@ class VideoEffectClient:
             try:
                 result = self.get_result(task_id, req_key)
 
-                if result.get("status") == "done":
-                    return result
-                elif result.get("status") in ["not_found", "expired"]:
-                    raise Exception(f"任务异常: {result.get('status')}")
+                # 直接显示API完整响应
+                print(f"API响应: {result}")
 
-                # 缓存req_key避免重复检测
-                if not req_key:
-                    req_key = self.get_task_req_key(task_id)
+                # 检查是否完成
+                if result.get("code") == 10000:  # 成功
+                    data = result.get("data", {})
+                    status = data.get("status")
 
-                print(f"任务进行中... 状态: {result.get('status', 'unknown')}")
+                    if status == "done":
+                        return result
+                    elif status in ["not_found", "expired"]:
+                        raise Exception(f"任务异常: {status}")
+                    else:
+                        # 任务还在处理中，继续等待
+                        if not req_key:
+                            # 自动检测req_key
+                            req_key = self.get_task_req_key(task_id)
+                            # 版本检测返回格式为"req_key|response"，需要提取req_key
+                            if "|" in req_key:
+                                req_key = req_key.split("|")[0]
+                else:
+                    # API返回错误，直接抛出异常
+                    raise Exception(f"API错误: {result}")
+
                 time.sleep(check_interval)
 
             except Exception as e:
@@ -510,18 +520,32 @@ class VideoEffectClient:
         # 步骤1：提交任务
         task_id = self.submit_task(image_url, template_id, final_stitch_switch)
 
-        # 步骤2：等待完成
-        result = self.wait_for_completion(task_id, max_wait_time=max_wait_time)
+        # 步骤2：等待完成，直接使用对应的req_key避免版本检测
+        if template_id in self.V2_TEMPLATES:
+            req_key = "i2v_template_cv_v2"
+        else:
+            req_key = "i2v_bytedance_effects_v1"
+        result = self.wait_for_completion(task_id, max_wait_time, 15, req_key)
 
-        if result.get("status") == "done":
-            print("🎉 特效视频生成成功！")
-            resp_data = result.get("resp_data", {})
-            video_url = resp_data.get("video_url")
-            print(f"📹 视频URL: {video_url}")
-            return {
-                "video_url": video_url,
-                "task_id": task_id,
-                "resp_data": resp_data
-            }
+        if result.get("code") == 10000:
+            data = result.get("data", {})
+            if data.get("status") == "done":
+                print("🎉 特效视频生成成功！")
+                # resp_data是JSON字符串，需要解析
+                import json
+                resp_data_str = data.get("resp_data", "{}")
+                try:
+                    resp_data = json.loads(resp_data_str)
+                except:
+                    resp_data = {"raw": resp_data_str}
+                video_url = resp_data.get("video_url")
+                print(f"📹 视频URL: {video_url}")
+                return {
+                    "video_url": video_url,
+                    "task_id": task_id,
+                    "resp_data": resp_data
+                }
+            else:
+                raise Exception(f"视频生成未完成: {result}")
         else:
             raise Exception(f"视频生成失败: {result}")

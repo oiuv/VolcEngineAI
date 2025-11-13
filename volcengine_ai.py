@@ -7,7 +7,7 @@ import os
 import sys
 import argparse
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from src.config import ACCESS_KEY, SECRET_KEY
 from src.modules.avatar_manager import avatar_manager
@@ -205,40 +205,15 @@ def query_avatar(args):
 
         result = ai.get_avatar_result(args.task_id, args.mode)
 
-        if "resource_id" in result:
-            print(f"✅ 形象创建成功！")
-            print(f"🆔 形象ID: {result['resource_id']}")
-            print(f"📋 类型: {result.get('role_type', 'unknown')}")
-            print(f"🎯 模式: {args.mode}")
+        # 直接显示API原始响应
+        print(f"📋 API原始响应: {result}")
 
-            # 保存形象信息，包含API响应数据
+        # 如果有resource_id，保存形象信息
+        if isinstance(result, dict) and "resource_id" in result:
             avatar_manager.save_avatar(args.task_id, result, args.mode, result.get("resp_data"))
-            return
-        elif result.get("status") == "done":
-            print(f"✅ 形象创建完成（{args.mode}模式）")
-            return
-        else:
-            status = result.get("status", "unknown")
-
-            # 根据状态显示具体信息
-            if status == "in_queue":
-                print(f"🔄 {args.mode}模式: 任务排队中")
-            elif status == "generating":
-                print(f"⚡ {args.mode}模式: 正在处理中")
-                print("💡 提示: 通常需要3-10分钟，请耐心等待")
-            elif status == "not_found":
-                print(f"❌ {args.mode}模式: 任务未找到")
-                print("💡 请检查任务ID是否正确，或使用正确的模式查询")
-            elif status == "expired":
-                print(f"⏰ {args.mode}模式: 任务已过期")
-                print("💡 任务有效期为12小时，过期后需要重新提交")
-            else:
-                print(f"📊 任务状态: {status}")
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
-        if "未找到" in str(e) or "not_found" in str(e).lower():
-            print(f"💡 提示: 请确认使用正确的模式查询（--mode {args.mode}）")
 
 
 def generate_video(args):
@@ -260,46 +235,17 @@ def query_video(args):
 
         result = ai.get_video_result(args.task_id, args.mode)
 
-        if "video_url" in result:
-            print(f"✅ 视频生成成功！")
-            print(f"📹 视频URL: {result['video_url']}")
-            if result.get('video_meta'):
-                meta = result['video_meta']
-                print(f"📐 尺寸: {meta.get('Width')}x{meta.get('Height')}")
-                print(f"⏱️ 时长: {meta.get('Duration')}秒")
-            print(f"🎯 模式: {args.mode}")
+        # 直接显示API原始响应
+        print(f"📋 API原始响应: {result}")
 
-            # 自动下载视频
-            if args.download:
-                video_url = result['video_url']
-                filename = args.filename or f"video_{args.task_id}.mp4"
-                download_video(video_url, filename)
-            return
-        elif result.get("status") == "done":
-            print(f"✅ 视频生成完成（{args.mode}模式）")
-            return
-        else:
-            status = result.get("status", "unknown")
-
-            # 根据状态显示具体信息
-            if status == "in_queue":
-                print(f"🔄 {args.mode}模式: 任务排队中")
-            elif status == "generating":
-                print(f"⚡ {args.mode}模式: 正在处理中")
-                print("💡 提示: 通常需要3-10分钟，请耐心等待")
-            elif status == "not_found":
-                print(f"❌ {args.mode}模式: 任务未找到")
-                print("💡 请检查任务ID是否正确，或使用正确的模式查询")
-            elif status == "expired":
-                print(f"⏰ {args.mode}模式: 任务已过期")
-                print("💡 任务有效期为12小时，过期后需要重新提交")
-            else:
-                print(f"📊 任务状态: {status}")
+        # 检测到成功状态时自动下载视频
+        if isinstance(result, dict) and result.get("status") == "done" and result.get("video_url"):
+            video_url = result["video_url"]
+            filename = args.filename or f"video_{args.task_id}.mp4"
+            download_video(video_url, filename)
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
-        if "未找到" in str(e) or "not_found" in str(e).lower():
-            print(f"💡 提示: 请确认使用正确的模式查询（--mode {args.mode}）")
 
 
 def download_video(url: str, filename: str):
@@ -417,35 +363,23 @@ def query_effect_video(args):
 
         result = ai.get_effect_video_result(args.task_id)
 
-        if result.get("status") == "done":
-            resp_data = result.get("resp_data", {})
-            if "video_url" in resp_data:
-                print(f"✅ 特效视频生成成功！")
-                print(f"📹 视频URL: {resp_data['video_url']}")
+        # 直接显示API的原始响应
+        print(f"📋 API原始响应: {result}")
 
-                # 自动下载视频
-                if args.download:
-                    video_url = resp_data['video_url']
-                    filename = args.filename or f"effect_video_{args.task_id}.mp4"
-                    download_video(video_url, filename)
-                return
-        else:
-            status = result.get("status", "unknown")
-
-            # 根据状态显示具体信息
-            if status == "in_queue":
-                print(f"🔄 任务排队中")
-            elif status == "generating":
-                print(f"⚡ 正在处理中")
-                print("💡 提示: 通常需要3-10分钟，请耐心等待")
-            elif status == "not_found":
-                print(f"❌ 任务未找到")
-                print("💡 请检查任务ID是否正确")
-            elif status == "expired":
-                print(f"⏰ 任务已过期")
-                print("💡 任务有效期为12小时，过期后需要重新提交")
-            else:
-                print(f"📊 任务状态: {status}")
+        # 如果API返回完成且有视频URL，自动下载
+        if isinstance(result, dict) and result.get("code") == 10000:
+            data = result.get("data", {})
+            if data.get("status") == "done":
+                resp_data_str = data.get("resp_data", "{}")
+                try:
+                    import json
+                    resp_data = json.loads(resp_data_str)
+                    video_url = resp_data.get("video_url")
+                    if video_url:
+                        filename = args.filename or f"effect_video_{args.task_id}.mp4"
+                        download_video(video_url, filename)
+                except:
+                    pass
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
@@ -486,44 +420,17 @@ def query_lip_sync(args):
 
         result = ai.get_lip_sync_result(args.task_id, args.mode)
 
-        if "video_url" in result:
-            print(f"✅ 视频改口型成功！")
-            print(f"📹 视频URL: {result['video_url']}")
+        # 直接显示API原始响应
+        print(f"📋 API原始响应: {result}")
 
-            # 下载视频
-            if args.download:
-                try:
-                    filename = args.filename or f"lip_sync_video_{args.task_id}.mp4"
-                    download_video(result['video_url'], filename)
-                    print(f"💾 视频已下载为: {filename}")
-                except Exception as e:
-                    print(f"⚠️ 下载失败: {str(e)}")
-            return
-        elif result.get("status") == "done":
-            print(f"✅ 视频改口型完成（{args.mode}模式）")
-            return
-        else:
-            status = result.get("status", "unknown")
-
-            # 根据状态显示具体信息
-            if status == "in_queue":
-                print(f"🔄 {args.mode}模式: 任务排队中")
-            elif status == "generating":
-                print(f"⚡ {args.mode}模式: 正在处理中")
-                print("💡 提示: 通常需要几分钟，请耐心等待")
-            elif status == "not_found":
-                print(f"❌ {args.mode}模式: 任务未找到")
-                print("💡 请检查任务ID是否正确，或使用正确的模式查询")
-            elif status == "expired":
-                print(f"⏰ {args.mode}模式: 任务已过期")
-                print("💡 任务有效期为12小时，过期后需要重新提交")
-            else:
-                print(f"📊 任务状态: {status}")
+        # 检测到成功状态时自动下载视频
+        if isinstance(result, dict) and result.get("status") == "done" and result.get("video_url"):
+            video_url = result["video_url"]
+            filename = args.filename or f"lip_sync_video_{args.task_id}.mp4"
+            download_video(video_url, filename)
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
-        if "未找到" in str(e) or "not_found" in str(e).lower():
-            print(f"💡 提示: 请确认使用正确的模式查询（--mode {args.mode}）")
 
 def change_lip_sync(args):
     """视频改口型（完整流程）"""
@@ -677,21 +584,44 @@ def generate_all(args):
     ai = VolcEngineAI()
     try:
         print(f"开始生成视频（{args.mode}模式）...")
-        print("💡 提示: 视频生成需要3-10分钟，请耐心等待")
 
-        result = ai.generate_avatar_video_from_image_audio(
-            image_url=args.image_url,
-            audio_url=args.audio_url,
-            mode=args.mode,
-            max_wait_time=600  # 统一10分钟超时
-        )
-        print("🎉 视频生成成功！")
-        print(f"📹 视频URL: {result['video_url']}")
-        print(f"🆔 形象ID: {result['resource_id']}")
+        if hasattr(args, 'no_wait') and args.no_wait:
+            print("📝 创建形象并提交视频任务，不等待视频生成完成")
+            print("💡 提示: 视频任务提交后可使用查询命令检查状态")
+
+            # 创建形象并等待完成（快速）
+            print("步骤1：创建数字形象...")
+            role_task_id = ai.create_avatar(args.image_url, args.mode)
+            role_result = ai.get_avatar_result(role_task_id, args.mode)
+            resource_id = role_result["resource_id"]
+            print(f"✅ 形象创建成功！ID: {resource_id}")
+
+            # 提交视频任务但不等待
+            print("步骤2：提交视频生成任务...")
+            video_task_id = ai.generate_avatar_video(resource_id, args.audio_url, args.mode)
+            print(f"✅ 视频任务已提交")
+            print(f"🆔 视频任务ID: {video_task_id}")
+            print(f"💡 查询视频状态: python volcengine_ai.py va query-video {video_task_id} --mode {args.mode}")
+            print(f"💡 下载视频: python volcengine_ai.py va query-video {video_task_id} --mode {args.mode} --download")
+        else:
+            print("💡 提示: 视频生成需要3-10分钟，请耐心等待")
+            print("🚀 如不想等待视频生成，可使用 --no-wait 参数")
+
+            result = ai.generate_avatar_video_from_image_audio(
+                image_url=args.image_url,
+                audio_url=args.audio_url,
+                mode=args.mode,
+                max_wait_time=0  # 0表示不限制超时时间
+            )
+            print("🎉 视频生成成功！")
+            print(f"📹 视频URL: {result['video_url']}")
+            print(f"🆔 形象ID: {result['resource_id']}")
+
     except Exception as e:
         print(f"❌ 生成失败: {str(e)}")
         if "超时" in str(e):
-            print("💡 建议: 可以单独查询任务状态")
+            print("💡 建议: 使用 --no-wait 参数只提交视频任务，不等待生成完成")
+            print("💡 或者可以单独查询任务状态")
             print("   请使用上面日志中显示的视频任务ID进行查询")
             print(f"   python volcengine_ai.py va query-video <视频任务ID> --mode {args.mode}")
 
@@ -733,7 +663,7 @@ def va_query_video_handler(args):
         def __init__(self):
             self.task_id = args.task_id
             self.mode = args.mode
-            self.download = args.download
+            self.download = True  # 总是下载
             self.filename = args.filename
 
     query_video(Args())
@@ -745,6 +675,7 @@ def va_create_handler(args):
             self.image_url = args.image_url
             self.audio_url = args.audio_url
             self.mode = args.mode
+            self.no_wait = args.no_wait
 
     generate_all(Args())
 
@@ -764,7 +695,7 @@ def ve_query_handler(args):
     class Args:
         def __init__(self):
             self.task_id = args.task_id
-            self.download = args.download
+            self.download = True  # 总是下载
             self.filename = args.filename
 
     query_effect_video(Args())
@@ -804,7 +735,7 @@ def vl_query_handler(args):
         def __init__(self):
             self.task_id = args.task_id
             self.mode = args.mode
-            self.download = args.download
+            self.download = True  # 总是下载
             self.filename = args.filename
 
     query_lip_sync(Args())
@@ -1061,8 +992,7 @@ def main():
     va_query_video = va_subparsers.add_parser('query-video', help='查询视频生成状态')
     va_query_video.add_argument('task_id', help='任务ID')
     va_query_video.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], required=True, help='生成时使用的模式')
-    va_query_video.add_argument('--download', action='store_true', help='下载视频到本地')
-    va_query_video.add_argument('--filename', help='保存文件名')
+    va_query_video.add_argument('--filename', help='保存文件名（可选，默认为video_<task_id>.mp4）')
     va_query_video.set_defaults(func=va_query_video_handler)
 
     # va create (一键生成)
@@ -1070,6 +1000,7 @@ def main():
     va_create.add_argument('image_url', help='图片URL')
     va_create.add_argument('audio_url', help='音频URL')
     va_create.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
+    va_create.add_argument('--no-wait', action='store_true', help='不等待完成，只提交任务后返回任务ID')
     va_create.set_defaults(func=va_create_handler)
 
     # === 特效视频 (ve) ===
@@ -1086,8 +1017,7 @@ def main():
     # ve query
     ve_query = ve_subparsers.add_parser('query', help='查询特效视频生成状态')
     ve_query.add_argument('task_id', help='任务ID')
-    ve_query.add_argument('--download', action='store_true', help='下载视频到本地')
-    ve_query.add_argument('--filename', help='保存文件名')
+    ve_query.add_argument('--filename', help='保存文件名（可选，默认为effect_video_<task_id>.mp4）')
     ve_query.set_defaults(func=ve_query_handler)
 
     # ve templates
@@ -1114,8 +1044,7 @@ def main():
     vl_query = vl_subparsers.add_parser('query', help='查询视频改口型状态')
     vl_query.add_argument('task_id', help='任务ID')
     vl_query.add_argument('--mode', choices=['lite', 'basic'], required=True, help='生成时使用的模式')
-    vl_query.add_argument('--download', action='store_true', help='下载视频到本地')
-    vl_query.add_argument('--filename', help='保存文件名')
+    vl_query.add_argument('--filename', help='保存文件名（可选，默认为lip_sync_video_<task_id>.mp4）')
     vl_query.set_defaults(func=vl_query_handler)
 
     # === 即梦AI数字人 (jm) ===
