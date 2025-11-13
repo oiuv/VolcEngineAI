@@ -157,7 +157,7 @@ def query_avatar(args):
                 print(f"🔄 {args.mode}模式: 任务排队中")
             elif status == "generating":
                 print(f"⚡ {args.mode}模式: 正在处理中")
-                print("💡 提示: 通常需要1-5分钟，请耐心等待")
+                print("💡 提示: 通常需要3-10分钟，请耐心等待")
             elif status == "not_found":
                 print(f"❌ {args.mode}模式: 任务未找到")
                 print("💡 请检查任务ID是否正确，或使用正确的模式查询")
@@ -218,7 +218,7 @@ def query_video(args):
                 print(f"🔄 {args.mode}模式: 任务排队中")
             elif status == "generating":
                 print(f"⚡ {args.mode}模式: 正在处理中")
-                print("💡 提示: 通常需要1-5分钟，请耐心等待")
+                print("💡 提示: 通常需要3-10分钟，请耐心等待")
             elif status == "not_found":
                 print(f"❌ {args.mode}模式: 任务未找到")
                 print("💡 请检查任务ID是否正确，或使用正确的模式查询")
@@ -500,19 +500,13 @@ def generate_all(args):
     ai = VolcEngineAI()
     try:
         print(f"开始生成视频（{args.mode}模式）...")
-        print("💡 提示: 大画幅模式处理时间较长，请耐心等待（3-10分钟）")
-
-        # 根据模式设置不同的超时时间
-        if args.mode == "loopyb":
-            timeout = 600  # 大画幅模式10分钟
-        else:
-            timeout = 300  # 其他模式5分钟
+        print("💡 提示: 视频生成需要3-10分钟，请耐心等待")
 
         result = ai.generate_avatar_video_from_image_audio(
             image_url=args.image_url,
             audio_url=args.audio_url,
             mode=args.mode,
-            max_wait_time=timeout
+            max_wait_time=600  # 统一10分钟超时
         )
         print("🎉 视频生成成功！")
         print(f"📹 视频URL: {result['video_url']}")
