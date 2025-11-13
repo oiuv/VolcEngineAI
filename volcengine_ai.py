@@ -59,11 +59,11 @@ class VolcEngineAI:
             raise Exception("单图音频驱动模块未正确加载")
         return self._avatar_client.get_video_result(task_id, mode, aigc_meta)
 
-    def generate_avatar_video_from_image_audio(self, image_url: str, audio_url: str, mode: str = "normal", aigc_meta: Optional[Dict] = None):
+    def generate_avatar_video_from_image_audio(self, image_url: str, audio_url: str, mode: str = "normal", aigc_meta: Optional[Dict] = None, max_wait_time: int = 600):
         """从图片和音频生成完整视频"""
         if not self._avatar_client:
             raise Exception("单图音频驱动模块未正确加载")
-        return self._avatar_client.generate_video_from_image_audio(image_url, audio_url, mode, aigc_meta)
+        return self._avatar_client.generate_video_from_image_audio(image_url, audio_url, mode, aigc_meta, max_wait_time)
 
     # 预留其他AI功能接口
     def image_generation(self, prompt: str, **kwargs):
