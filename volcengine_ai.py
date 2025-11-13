@@ -23,6 +23,7 @@ class VolcEngineAI:
 
         # 动态导入模块
         self._avatar_client = None
+        self._lip_sync_client = None
         self._init_clients()
 
     def _init_clients(self):
@@ -33,6 +34,12 @@ class VolcEngineAI:
             self._avatar_client = VideoAudioDrivenClient(self.access_key, self.secret_key)
         except ImportError:
             self._avatar_client = None
+
+        try:
+            from src.core.video_lip_sync_client import VideoLipSyncClient
+            self._lip_sync_client = VideoLipSyncClient(self.access_key, self.secret_key)
+        except ImportError:
+            self._lip_sync_client = None
 
     # 单图音频驱动功能
     def create_avatar(self, image_url: str, mode: str = "normal") -> str:
@@ -116,6 +123,25 @@ class VolcEngineAI:
         from src.core.video_effect_client import VideoEffectClient
         client = VideoEffectClient(self.access_key, self.secret_key)
         return client.generate_video_from_image(image_url, template_id, **kwargs)
+
+    # 视频改口型功能
+    def submit_lip_sync_task(self, video_url: str, audio_url: str, mode: str = "lite", **kwargs) -> str:
+        """提交视频改口型任务"""
+        if not self._lip_sync_client:
+            raise Exception("视频改口型模块未正确加载")
+        return self._lip_sync_client.submit_lip_sync_task(video_url, audio_url, mode, **kwargs)
+
+    def get_lip_sync_result(self, task_id: str, mode: str = "lite", aigc_meta: Optional[Dict] = None):
+        """获取视频改口型结果"""
+        if not self._lip_sync_client:
+            raise Exception("视频改口型模块未正确加载")
+        return self._lip_sync_client.get_lip_sync_result(task_id, mode, aigc_meta)
+
+    def change_lip_sync(self, video_url: str, audio_url: str, mode: str = "lite", aigc_meta: Optional[Dict] = None, max_wait_time: int = 600, **kwargs):
+        """视频改口型（完整流程）"""
+        if not self._lip_sync_client:
+            raise Exception("视频改口型模块未正确加载")
+        return self._lip_sync_client.change_lip_sync(video_url, audio_url, mode, aigc_meta, max_wait_time, **kwargs)
 
 
 def create_avatar(args):
@@ -385,6 +411,118 @@ def query_effect_video(args):
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
 
+def submit_lip_sync_task(args):
+    """提交视频改口型任务"""
+    ai = VolcEngineAI()
+    try:
+        # 构建可选参数
+        kwargs = {}
+        if args.separate_vocal:
+            kwargs['separate_vocal'] = True
+        if args.open_scenedet:
+            kwargs['open_scenedet'] = True
+        # align_audio在lite模式下默认为True
+        if args.mode == 'lite':
+            kwargs['align_audio'] = getattr(args, 'align_audio', True) or True
+        if args.align_audio_reverse:
+            kwargs['align_audio_reverse'] = True
+            # 倒放循环需要同时开启正循环
+            kwargs['align_audio'] = True
+        if hasattr(args, 'templ_start_seconds') and args.templ_start_seconds is not None:
+            kwargs['templ_start_seconds'] = args.templ_start_seconds
+
+        task_id = ai.submit_lip_sync_task(args.video_url, args.audio_url, args.mode, **kwargs)
+        print(f"✅ 视频改口型任务已提交")
+        print(f"🆔 任务ID: {task_id}")
+        print("💡 可以使用以下命令查询状态:")
+        print(f"   python volcengine_ai.py vl query {task_id} --mode {args.mode}")
+    except Exception as e:
+        print(f"❌ 提交失败: {str(e)}")
+
+def query_lip_sync(args):
+    """查询视频改口型状态"""
+    ai = VolcEngineAI()
+    try:
+        print(f"🔍 查询任务ID: {args.task_id} ({args.mode}模式)")
+
+        result = ai.get_lip_sync_result(args.task_id, args.mode)
+
+        if "video_url" in result:
+            print(f"✅ 视频改口型成功！")
+            print(f"📹 视频URL: {result['video_url']}")
+
+            # 下载视频
+            if args.download:
+                try:
+                    filename = args.filename or f"lip_sync_video_{args.task_id}.mp4"
+                    download_video(result['video_url'], filename)
+                    print(f"💾 视频已下载为: {filename}")
+                except Exception as e:
+                    print(f"⚠️ 下载失败: {str(e)}")
+            return
+        elif result.get("status") == "done":
+            print(f"✅ 视频改口型完成（{args.mode}模式）")
+            return
+        else:
+            status = result.get("status", "unknown")
+
+            # 根据状态显示具体信息
+            if status == "in_queue":
+                print(f"🔄 {args.mode}模式: 任务排队中")
+            elif status == "generating":
+                print(f"⚡ {args.mode}模式: 正在处理中")
+                print("💡 提示: 通常需要几分钟，请耐心等待")
+            elif status == "not_found":
+                print(f"❌ {args.mode}模式: 任务未找到")
+                print("💡 请检查任务ID是否正确，或使用正确的模式查询")
+            elif status == "expired":
+                print(f"⏰ {args.mode}模式: 任务已过期")
+                print("💡 任务有效期为12小时，过期后需要重新提交")
+            else:
+                print(f"📊 任务状态: {status}")
+
+    except Exception as e:
+        print(f"❌ 查询失败: {str(e)}")
+        if "未找到" in str(e) or "not_found" in str(e).lower():
+            print(f"💡 提示: 请确认使用正确的模式查询（--mode {args.mode}）")
+
+def change_lip_sync(args):
+    """视频改口型（完整流程）"""
+    ai = VolcEngineAI()
+    try:
+        # 构建可选参数
+        kwargs = {}
+        if args.separate_vocal:
+            kwargs['separate_vocal'] = True
+        if args.open_scenedet:
+            kwargs['open_scenedet'] = True
+        # align_audio在lite模式下默认为True
+        if args.mode == 'lite':
+            kwargs['align_audio'] = getattr(args, 'align_audio', True) or True
+        if args.align_audio_reverse:
+            kwargs['align_audio_reverse'] = True
+            # 倒放循环需要同时开启正循环
+            kwargs['align_audio'] = True
+        if hasattr(args, 'templ_start_seconds') and args.templ_start_seconds is not None:
+            kwargs['templ_start_seconds'] = args.templ_start_seconds
+
+        print(f"开始视频改口型（{args.mode}模式）...")
+
+        result = ai.change_lip_sync(
+            args.video_url,
+            args.audio_url,
+            args.mode,
+            max_wait_time=600,
+            **kwargs
+        )
+
+        print("🎉 视频改口型完成！")
+        print(f"📹 视频URL: {result['video_url']}")
+        print(f"🆔 任务ID: {result['task_id']}")
+
+    except Exception as e:
+        print(f"❌ 视频改口型失败: {str(e)}")
+
 
 def list_effect_templates():
     """列出可用的特效模板"""
@@ -605,6 +743,33 @@ def va_avatars_handler(args):
 
     list_avatars(Args())
 
+# 视频改口型 (vl) 处理器
+def vl_create_handler(args):
+    """生成视频改口型"""
+    class Args:
+        def __init__(self):
+            self.video_url = args.video_url
+            self.audio_url = args.audio_url
+            self.mode = args.mode
+            self.separate_vocal = args.separate_vocal
+            self.open_scenedet = args.open_scenedet
+            self.align_audio = args.align_audio
+            self.align_audio_reverse = args.align_audio_reverse
+            self.templ_start_seconds = args.templ_start_seconds
+
+    change_lip_sync(Args())
+
+def vl_query_handler(args):
+    """查询视频改口型状态"""
+    class Args:
+        def __init__(self):
+            self.task_id = args.task_id
+            self.mode = args.mode
+            self.download = args.download
+            self.filename = args.filename
+
+    query_lip_sync(Args())
+
 
 def main():
     """统一入口主函数"""
@@ -671,6 +836,30 @@ def main():
     ve_templates = ve_subparsers.add_parser('templates', help='列出可用的特效模板')
     ve_templates.set_defaults(func=ve_templates_handler)
 
+    # === 视频改口型 (vl) ===
+    vl_parser = subparsers.add_parser('vl', help='视频改口型生成')
+    vl_subparsers = vl_parser.add_subparsers(dest='vl_action', help='视频改口型操作')
+
+    # vl create
+    vl_create = vl_subparsers.add_parser('create', help='生成视频改口型')
+    vl_create.add_argument('video_url', help='视频素材URL')
+    vl_create.add_argument('audio_url', help='音频URL')
+    vl_create.add_argument('--mode', choices=['lite', 'basic'], default='lite', help='模式选择 (lite: 单人正面视频, basic: 单人复杂场景)')
+    vl_create.add_argument('--separate-vocal', action='store_true', help='开启人声分离（仅basic模式）')
+    vl_create.add_argument('--open-scenedet', action='store_true', help='开启场景切分与说话人识别（仅basic模式）')
+    vl_create.add_argument('--align-audio', action='store_true', help='开启视频循环（仅lite模式）')
+    vl_create.add_argument('--align-audio-reverse', action='store_true', help='开启倒放循环（仅lite模式，需同时开启align-audio）')
+    vl_create.add_argument('--templ-start-seconds', type=float, help='模板视频开始时间（仅lite模式）')
+    vl_create.set_defaults(func=vl_create_handler)
+
+    # vl query
+    vl_query = vl_subparsers.add_parser('query', help='查询视频改口型状态')
+    vl_query.add_argument('task_id', help='任务ID')
+    vl_query.add_argument('--mode', choices=['lite', 'basic'], required=True, help='生成时使用的模式')
+    vl_query.add_argument('--download', action='store_true', help='下载视频到本地')
+    vl_query.add_argument('--filename', help='保存文件名')
+    vl_query.set_defaults(func=vl_query_handler)
+
       # === 形象管理 (va) - 添加到va子命令中 ===
     va_avatars = va_subparsers.add_parser('avatars', help='查看可用形象')
     va_avatars.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='按模式筛选')
@@ -700,6 +889,11 @@ def main():
     elif args.command == 've':
         if not args.ve_action:
             ve_parser.print_help()
+            return
+        args.func(args)
+    elif args.command == 'vl':
+        if not args.vl_action:
+            vl_parser.print_help()
             return
         args.func(args)
 

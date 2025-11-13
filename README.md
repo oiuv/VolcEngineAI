@@ -7,16 +7,28 @@
 ### 1. 单图音频驱动视频生成
 根据用户上传的单张图片+音频，生成该图片对应的视频效果。用户上传的单张图片可以是人像图片，也可以是宠物图片/动漫图片等。
 
-### 2. 创意特效视频生成
+### 2. 视频改口型
+输入一段单人口播视频+音频，在保留说话人形象特点的前提下，将视频中的人物口型根据指定的音频输入进行修改。支持Lite模式和Basic模式，适用于各种场景需求。
+
+### 3. 创意特效视频生成
 基于单张图片或双张图片，使用AI技术生成各种创意特效视频，支持49种不同的特效模板，涵盖卡通变身、情感互动、变装换装等多种风格。
 
 ## 驱动模式说明
+
+### 单图音频驱动模式
 
 | 模式 | 驱动范围 | 输出比例 | 最大音频长度 | 支持类型 | 特点 |
 |------|----------|----------|--------------|----------|------|
 | **普通模式**<br>(normal) | 嘴部 | 原图比例 | 180秒 | 真人、动漫、宠物 | 嘴部精准驱动，支持多人/多宠物 |
 | **灵动模式**<br>(loopy) | 全脸 | 固定1:1<br>(512*512) | 180秒(真人)<br>90秒(宠物) | 真人、动漫、宠物 | 运动幅度大，表情丰富，随机性强 |
 | **大画幅灵动模式**<br>(loopyb) | 全脸+膝盖以上身体 | 多种比例<br>(16:9,9:16,3:4,4:3) | 45秒 | 真人、动漫<br>(不支持宠物) | 半身驱动，身体+脸部动作 |
+
+### 视频改口型模式
+
+| 模式 | 适用场景 | 最大音频长度 | 视频要求 | 特殊功能 |
+|------|----------|--------------|----------|----------|
+| **Lite模式**<br>(lite) | 单人正面视频 | 240秒 | 360p-1080p，mp4/mov格式 | 视频循环、倒放循环、开始时间设置 |
+| **Basic模式**<br>(basic) | 单人复杂场景 | 150秒 | 360p-1080p，mp4/mov格式 | 人声分离、场景切分、说话人识别 |
 
 ## 场景对比
 
@@ -67,59 +79,105 @@ python volcengine_ai.py -h
 
 ```bash
 # 普通模式
-python volcengine_ai.py generate-all --image-url "图片URL" --audio-url "音频URL" --mode normal
+python volcengine_ai.py va create "图片URL" "音频URL" --mode normal
 
 # 灵动模式
-python volcengine_ai.py generate-all --image-url "图片URL" --audio-url "音频URL" --mode loopy
+python volcengine_ai.py va create "图片URL" "音频URL" --mode loopy
 
 # 大画幅模式
-python volcengine_ai.py generate-all --image-url "图片URL" --audio-url "音频URL" --mode loopyb
+python volcengine_ai.py va create "图片URL" "音频URL" --mode loopyb
 ```
 
 ### 分步操作
 
 #### 1. 创建形象
 ```bash
-python volcengine_ai.py create-avatar --image-url "图片URL" --mode normal
+python volcengine_ai.py va create-avatar "图片URL" --mode normal
 ```
 
 #### 2. 查询形象状态
 ```bash
-python volcengine_ai.py query-avatar --task-id "任务ID" --mode normal
+python volcengine_ai.py va query-avatar "任务ID" --mode normal
 ```
 
 #### 3. 生成视频
 ```bash
-python volcengine_ai.py generate-video --resource-id "形象ID" --audio-url "音频URL" --mode normal
+python volcengine_ai.py va create-video "形象ID" "音频URL" --mode normal
 ```
 
 #### 4. 查询视频状态
 ```bash
-python volcengine_ai.py query-video --task-id "任务ID" --mode normal
+python volcengine_ai.py va query-video "任务ID" --mode normal
 ```
 
 #### 5. 下载视频
 ```bash
-python volcengine_ai.py query-video --task-id "任务ID" --mode normal --download --filename "视频名称.mp4"
+python volcengine_ai.py va query-video "任务ID" --mode normal --download --filename "视频名称.mp4"
 ```
 
 ### 形象管理
 
 #### 查看保存的形象
 ```bash
-python volcengine_ai.py list-avatars
+python volcengine_ai.py va avatars
 ```
 
 #### 使用最新形象生成视频
 ```bash
-python volcengine_ai.py use-latest-avatar --audio-url "音频URL" --mode normal
+python volcengine_ai.py va create-video "形象ID" "音频URL" --mode normal
+```
+
+## 视频改口型
+
+### 生成视频改口型
+
+#### Lite模式（推荐，适用于正面视频）
+```bash
+# 基础用法
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode lite
+
+# 开启视频循环（音频长于视频时）
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode lite --align-audio
+
+# 设置视频开始时间（从第5秒开始）
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode lite --templ-start-seconds 5
+
+# 开启倒放循环（解决循环跳变问题）
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode lite --align-audio --align-audio-reverse
+```
+
+#### Basic模式（适用于复杂场景）
+```bash
+# 基础用法
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode basic
+
+# 开启人声分离（抑制背景杂音）
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode basic --separate-vocal
+
+# 开启场景切分与说话人识别
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode basic --open-scenedet
+
+# 组合使用
+python volcengine_ai.py vl create "视频URL" "音频URL" --mode basic --separate-vocal --open-scenedet
+```
+
+### 查询视频改口型状态
+```bash
+# 查询状态
+python volcengine_ai.py vl query "任务ID" --mode lite
+
+# 查询状态并下载
+python volcengine_ai.py vl query "任务ID" --mode lite --download
+
+# 下载并指定文件名
+python volcengine_ai.py vl query "任务ID" --mode lite --download --filename "我的改口型视频.mp4"
 ```
 
 ## 创意特效视频生成
 
 ### 列出所有特效模板
 ```bash
-python volcengine_ai.py list-effect-templates
+python volcengine_ai.py ve templates
 ```
 
 ### 生成特效视频
@@ -127,75 +185,75 @@ python volcengine_ai.py list-effect-templates
 #### V1版本模板（20个模板）
 ```bash
 # 卡通变身
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id becoming_doll
+python volcengine_ai.py ve create "图片URL" becoming_doll
 
 # 召唤坐骑
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id all_things_ridability_pig
+python volcengine_ai.py ve create "图片URL" all_things_ridability_pig
 
 # 万物生花
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id all_things_bloom_with_flowers
+python volcengine_ai.py ve create "图片URL" all_things_bloom_with_flowers
 
 # AI环绕（美女/帅哥）
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id beauty_surround_720p
+python volcengine_ai.py ve create "图片URL" beauty_surround_720p
 
 # 天赐宝宝
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id ai_baby_720p
+python volcengine_ai.py ve create "图片URL" ai_baby_720p
 
 # 双图模板 - 爱的拥抱
-python volcengine_ai.py generate-effect-video --image-url "图片1.jpg|图片2.jpg" --template-id double_embrace
+python volcengine_ai.py ve create "图片1.jpg|图片2.jpg" double_embrace
 ```
 
 #### V2版本模板（29个模板）
 ```bash
 # emoji小人变身
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id multi_style_stacking_dolls
+python volcengine_ai.py ve create "图片URL" multi_style_stacking_dolls
 
 # 梦幻娃娃变身
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id fluffy_dream_doll_s2e_720p
+python volcengine_ai.py ve create "图片URL" fluffy_dream_doll_s2e_720p
 
 # 我的世界风
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id my_world_720p
+python volcengine_ai.py ve create "图片URL" my_world_720p
 
 # 装进水晶球
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id crystal_ball_720p
+python volcengine_ai.py ve create "图片URL" crystal_ball_720p
 
 # 天使手办变身
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id angel_figure_720p
+python volcengine_ai.py ve create "图片URL" angel_figure_720p
 
 # 毛毡钥匙扣变身
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id felt_keychain_720p
+python volcengine_ai.py ve create "图片URL" felt_keychain_720p
 
 # 拍立得风
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id polaroid_720p
+python volcengine_ai.py ve create "图片URL" polaroid_720p
 
 # 潮玩手办变身
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id blister_pack_action_figure_720p
+python volcengine_ai.py ve create "图片URL" blister_pack_action_figure_720p
 
 # 双图模板 - 法式热吻
-python volcengine_ai.py generate-effect-video --image-url "图片1.jpg|图片2.jpg" --template-id french_kiss_dual_version_720p
+python volcengine_ai.py ve create "图片1.jpg|图片2.jpg" french_kiss_dual_version_720p
 
 # 变装比基尼
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id costume_bikini_720p
+python volcengine_ai.py ve create "图片URL" costume_bikini_720p
 
 # 热舞
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id hot_dance_720p
+python volcengine_ai.py ve create "图片URL" hot_dance_720p
 
 # 变身美人鱼
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id transform_into_mermaid_720p
+python volcengine_ai.py ve create "图片URL" transform_into_mermaid_720p
 ```
 
 ### 查询特效视频状态
 ```bash
-python volcengine_ai.py query-effect-video --task-id "任务ID"
+python volcengine_ai.py ve query "任务ID"
 ```
 
 ### 下载特效视频
 ```bash
 # 使用默认文件名下载
-python volcengine_ai.py query-effect-video --task-id "任务ID" --download
+python volcengine_ai.py ve query "任务ID" --download
 
 # 指定文件名下载
-python volcengine_ai.py query-effect-video --task-id "任务ID" --download --filename "我的特效视频.mp4"
+python volcengine_ai.py ve query "任务ID" --download --filename "我的特效视频.mp4"
 ```
 
 ## 特效视频模板分类
@@ -249,6 +307,23 @@ python volcengine_ai.py query-effect-video --task-id "任务ID" --download --fil
 - 灵动模式：真人180秒，宠物90秒
 - 大画幅模式：最长45秒
 
+### 视频改口型要求
+
+#### 视频要求
+- 有效视频长度：3秒~350秒
+- 分辨率：360p~1080p（超过1080p会自动压缩，小于360p不处理）
+- 格式：支持mov、mp4、hdr（其他格式会转码）
+- 编码：支持h264（其他编码会转码）
+- 大小：不超过500M
+- 码率：1Mbps-30Mbps
+- 帧率：24~60fps
+- 人脸角度：45度为极限，建议左右偏角不超过30度、上下仰角不超过15度、歪头不超过20度
+
+#### 音频要求
+- Lite模式：最长240秒，最短1秒
+- Basic模式：最长150秒，最短1秒
+- 格式：建议使用mp3等常见音频格式
+
 ### 创意特效视频要求
 
 #### 图片要求
@@ -290,6 +365,7 @@ VolcEngineAI/
 │   ├── utils.py                  # 工具函数
 │   ├── core/                     # 核心模块
 │   │   ├── video_audio_driven_client.py  # 单图音频驱动视频客户端
+│   │   ├── video_lip_sync_client.py      # 视频改口型客户端
 │   │   └── video_effect_client.py        # 创意特效视频客户端
 │   └── modules/                  # 功能模块
 │       └── avatar_manager.py     # 形象管理
@@ -308,6 +384,13 @@ VolcEngineAI/
 - **形象管理**: 本地保存和管理创建的数字形象
 - **自动重试**: 内置网络超时重试机制
 - **状态监控**: 实时查询任务处理状态
+
+### 视频改口型
+- **双模式支持**: Lite模式（正面视频）和Basic模式（复杂场景）
+- **智能处理**: 保留说话人形象特点，精准修改口型
+- **高级功能**: 人声分离、场景切分、视频循环、倒放循环等
+- **自动重试**: 内置网络超时重试机制
+- **格式兼容**: 支持多种视频格式自动转码
 
 ### 创意特效视频生成
 - **双版本支持**: 自动识别V1和V2接口，支持49种特效模板

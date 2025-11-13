@@ -15,7 +15,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `video_effect_client.py` - 创意特效视频生成
 - `video_translation_client.py` - 视频翻译（待开发）
 - `video_lip_sync_client.py` - 视频改口型（待开发）
-- `video_image_driven_client.py` - 单图视频驱动（待开发）
+- `video_video_driven_client.py` - 单图视频驱动（待开发）
+- `video_dream_client.py` - 即梦视频生成（待开发）
+- `video_product_client.py` - 商品互动（待开发）
 
 #### 图像类 (image_)
 - `image_generation_client.py` - 文生图、图生图（待开发）
@@ -36,6 +38,7 @@ VolcEngineAI/
 │   ├── utils.py                  # 工具函数
 │   ├── core/                     # 核心模块
 │   │   ├── video_audio_driven_client.py
+│   │   ├── video_lip_sync_client.py
 │   │   └── video_effect_client.py
 │   └── modules/                  # 功能模块
 │       └── avatar_manager.py     # 形象管理
@@ -55,16 +58,25 @@ VolcEngineAI/
   - 普通模式：嘴部驱动，支持多人/多宠物
   - 灵动模式：全脸驱动，1:1输出
   - 大画幅模式：全身+脸部驱动，多种比例
-- **命令**:
-  - `create-avatar` - 创建数字形象
-  - `query-avatar` - 查询形象状态
-  - `generate-video` - 生成视频
-  - `query-video` - 查询视频状态
-  - `generate-all` - 一键生成完整流程
-  - `list-avatars` - 列出保存的形象
-  - `use-latest-avatar` - 使用最新形象生成视频
+- **新命令结构**:
+  - `va create-avatar <image-url> [--mode normal|loopy|loopyb]`
+  - `va query-avatar <task-id> --mode <mode>`
+  - `va create-video <resource-id> <audio-url> [--mode normal|loopy|loopyb]`
+  - `va query-video <task-id> --mode <mode> [--download]`
+  - `va create <image-url> <audio-url> [--mode normal|loopy|loopyb]`  # 一键生成
+  - `va avatars [--mode normal|loopy|loopyb]`  # 查看可用形象
 
-### 2. 创意特效视频生成 (VideoEffectClient)
+### 2. 视频改口型 (VideoLipSyncClient)
+- **支持模式**: lite(Lite模式), basic(Basic模式)
+- **功能特点**:
+  - Lite模式：支持单人正面视频，最大音频长度240秒
+  - Basic模式：支持单人复杂场景，最大音频长度150秒
+  - 人声分离、场景切分、视频循环等高级功能
+- **新命令结构**:
+  - `vl create <video-url> <audio-url> [--mode lite|basic] [--separate-vocal] [--open-scenedet] [--align-audio] [--align-audio-reverse] [--templ-start-seconds]`
+  - `vl query <task-id> --mode <mode> [--download]`
+
+### 3. 创意特效视频生成 (VideoEffectClient)
 - **支持版本**: V1和V2接口，自动识别
 - **模板数量**: 49个模板（V1: 20个，V2: 29个）
 - **模板分类**:
@@ -74,12 +86,12 @@ VolcEngineAI/
   - 双图模板支持（用`|`分隔URL）
   - 高清版本（480p/720p）
   - 分屏设置（V2版本）
-- **命令**:
-  - `generate-effect-video` - 生成特效视频
-  - `query-effect-video` - 查询特效视频状态
-  - `list-effect-templates` - 列出所有模板
+- **新命令结构**:
+  - `ve create <image-url> <template-id>`
+  - `ve query <task-id> [--download]`
+  - `ve templates`  # 查看可用模板
 
-### 3. 形象管理系统 (avatar_manager)
+### 4. 形象管理系统 (avatar_manager)
 - 本地JSON存储形象信息
 - 支持按模式筛选和管理
 - 自动保存创建成功的形象
@@ -120,23 +132,41 @@ set VOLCENGINE_SECRET_KEY=your_secret_key_here
 pip install -r requirements.txt
 ```
 
-### 运行程序
+### 运行程序（新命令结构）
 ```bash
 # 查看帮助
 python volcengine_ai.py -h
 
 # 列出所有特效模板
-python volcengine_ai.py list-effect-templates
+python volcengine_ai.py ve templates
 
 # 单图音频驱动 - 一键生成
-python volcengine_ai.py generate-all --image-url "图片URL" --audio-url "音频URL" --mode normal
+python volcengine_ai.py va create https://image.jpg https://audio.mp3 --mode loopyb
+
+# 创建数字形象
+python volcengine_ai.py va create-avatar https://image.jpg --mode loopyb
+
+# 查询形象状态
+python volcengine_ai.py va query-avatar 123456 --mode loopyb
+
+# 视频改口型 - Lite模式（推荐）
+python volcengine_ai.py vl create https://video.mp4 https://audio.mp3 --mode lite
+
+# 视频改口型 - Basic模式（复杂场景）
+python volcengine_ai.py vl create https://video.mp4 https://audio.mp3 --mode basic --separate-vocal --open-scenedet
+
+# 查询视频改口型状态
+python volcengine_ai.py vl query 123456 --mode lite --download
 
 # 创意特效视频生成
-python volcengine_ai.py generate-effect-video --image-url "图片URL" --template-id "模板ID"
+python volcengine_ai.py ve create https://image.jpg multi_style_stacking_dolls
 
-# 查询任务状态并下载视频
-python volcengine_ai.py query-video --task-id "任务ID" --mode normal --download
-python volcengine_ai.py query-effect-video --task-id "任务ID" --download
+# 查询视频状态并下载
+python volcengine_ai.py va query-video 123456 --mode loopyb --download
+python volcengine_ai.py ve query 789012 --download
+
+# 查看可用形象
+python volcengine_ai.py va avatars --mode loopyb
 ```
 
 ### 开发规范
@@ -193,8 +223,8 @@ from src.core.video_effect_client import VideoEffectClient
 
 ### 视频类功能
 - 视频翻译 (video_translation_client.py)
-- 视频改口型 (video_lip_sync_client.py)
-- 单图视频驱动 (video_image_driven_client.py)
+- 单图视频驱动 (video_video_driven_client.py)
+- 商品互动 (video_product_client.py)
 
 ### 图像类功能
 - 文生图、图生图 (image_generation_client.py)
@@ -218,6 +248,9 @@ from src.core.video_effect_client import VideoEffectClient
 - v1.0: 单图音频驱动视频生成
 - v1.1: 创意特效视频生成（V1+V2）
 - v1.2: 命名规范统一和架构优化
+- v1.3: 命令行结构重构，优化用户体验
+- v1.4: 修正命名不一致问题，统一命令前缀规范
+- v1.5: 新增视频改口型功能（vl命令）
 
 ---
-*最后更新: 2025-11-12*
+*最后更新: 2025-11-13*
