@@ -39,6 +39,7 @@ VolcEngineAI/
 │   ├── core/                     # 核心模块
 │   │   ├── video_audio_driven_client.py
 │   │   ├── video_lip_sync_client.py
+│   │   ├── video_jimeng_client.py
 │   │   └── video_effect_client.py
 │   └── modules/                  # 功能模块
 │       └── avatar_manager.py     # 形象管理
@@ -76,7 +77,20 @@ VolcEngineAI/
   - `vl create <video-url> <audio-url> [--mode lite|basic] [--separate-vocal] [--open-scenedet] [--align-audio] [--align-audio-reverse] [--templ-start-seconds]`
   - `vl query <task-id> --mode <mode> [--download]`
 
-### 3. 创意特效视频生成 (VideoEffectClient)
+### 3. 即梦AI数字人生成 (VideoJimengClient)
+- **支持版本**: OmniHuman 1.0和1.5两个版本
+- **功能特点**:
+  - 1.0版：主体识别 + 视频生成（480P，1元/秒，建议音频<15秒）
+  - 1.5版：主体识别 + 对象检测 + 视频生成（1080P，1.2元/秒，音频<35秒）
+  - 支持提示词控制、多主体指定、情感表演、宠物/动漫形象
+  - 智能处理：自动格式转码、参数验证、错误处理
+- **新命令结构**:
+  - `jm va <image-url> [--version 1.0|1.5]`  # 主体识别
+  - `jm va detect-object <image-url>`  # 对象检测（1.5版）
+  - `jm va create <image-url> <audio-url> [--version 1.0|1.5] [--prompt "..."] [--mask-url URL1 URL2] [--seed N] [--pe-fast-mode]`  # 生成视频
+  - `jm query <task-id> [--operation-type detect|detect_object|generate] [--version 1.0|1.5] [--download]`
+
+### 4. 创意特效视频生成 (VideoEffectClient)
 - **支持版本**: V1和V2接口，自动识别
 - **模板数量**: 49个模板（V1: 20个，V2: 29个）
 - **模板分类**:

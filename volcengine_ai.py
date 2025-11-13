@@ -41,6 +41,18 @@ class VolcEngineAI:
         except ImportError:
             self._lip_sync_client = None
 
+        try:
+            from src.core.video_jimeng_client import VideoJimengClient
+            self._jimeng_client = VideoJimengClient(self.access_key, self.secret_key)
+        except ImportError:
+            self._jimeng_client = None
+
+        try:
+            from src.core.video_effect_client import VideoEffectClient
+            self._effect_client = VideoEffectClient(self.access_key, self.secret_key)
+        except ImportError:
+            self._effect_client = None
+
     # 单图音频驱动功能
     def create_avatar(self, image_url: str, mode: str = "normal") -> str:
         """创建数字形象"""
@@ -119,10 +131,15 @@ class VolcEngineAI:
 
     def generate_effect_video(self, image_url: str, template_id: str, **kwargs):
         """生成创意特效视频"""
-        # 延迟导入，避免循环依赖
-        from src.core.video_effect_client import VideoEffectClient
-        client = VideoEffectClient(self.access_key, self.secret_key)
-        return client.generate_video_from_image(image_url, template_id, **kwargs)
+        if not self._effect_client:
+            raise Exception("特效视频模块未正确加载")
+        return self._effect_client.generate_video_from_image(image_url, template_id, **kwargs)
+
+    def get_effect_video_result(self, task_id: str):
+        """获取特效视频生成结果"""
+        if not self._effect_client:
+            raise Exception("特效视频模块未正确加载")
+        return self._effect_client.get_result(task_id)
 
     # 视频改口型功能
     def submit_lip_sync_task(self, video_url: str, audio_url: str, mode: str = "lite", **kwargs) -> str:
@@ -142,6 +159,31 @@ class VolcEngineAI:
         if not self._lip_sync_client:
             raise Exception("视频改口型模块未正确加载")
         return self._lip_sync_client.change_lip_sync(video_url, audio_url, mode, aigc_meta, max_wait_time, **kwargs)
+
+    # 即梦AI数字人功能
+    def jm_detect_avatar(self, image_url: str, version: str = "1.5"):
+        """数字人形象识别"""
+        if not self._jimeng_client:
+            raise Exception("即梦AI模块未正确加载")
+        return self._jimeng_client.detect_avatar(image_url, version)
+
+    def jm_detect_object(self, image_url: str):
+        """对象检测（1.5版专用）"""
+        if not self._jimeng_client:
+            raise Exception("即梦AI模块未正确加载")
+        return self._jimeng_client.detect_object(image_url)
+
+    def jm_create_video(self, image_url: str, audio_url: str, version: str = "1.5", prompt: Optional[str] = None, mask_url: Optional[List[str]] = None, seed: Optional[int] = None, pe_fast_mode: bool = False):
+        """生成数字人视频"""
+        if not self._jimeng_client:
+            raise Exception("即梦AI模块未正确加载")
+        return self._jimeng_client.generate_video_from_image_audio(image_url, audio_url, version, prompt, mask_url, seed, pe_fast_mode)
+
+    def jm_query_result(self, task_id: str, operation_type: str = "generate", version: str = "1.5"):
+        """查询即梦AI任务结果"""
+        if not self._jimeng_client:
+            raise Exception("即梦AI模块未正确加载")
+        return self._jimeng_client.get_result(task_id, operation_type, version)
 
 
 def create_avatar(args):
@@ -371,12 +413,9 @@ def query_effect_video(args):
     """查询特效视频状态"""
     ai = VolcEngineAI()
     try:
-        from src.core.video_effect_client import VideoEffectClient
-        client = VideoEffectClient(ai.access_key, ai.secret_key)
-
         print(f"🔍 查询特效视频任务ID: {args.task_id}")
 
-        result = client.get_result(args.task_id)
+        result = ai.get_effect_video_result(args.task_id)
 
         if result.get("status") == "done":
             resp_data = result.get("resp_data", {})
@@ -770,6 +809,225 @@ def vl_query_handler(args):
 
     query_lip_sync(Args())
 
+# 即梦AI数字人 (jm) 处理器
+def jm_detect_avatar_handler(args):
+    """主体识别"""
+    class Args:
+        def __init__(self):
+            self.image_url = args.image_url
+            self.version = args.version
+
+    jm_detect_avatar(Args())
+
+
+def jm_detect_avatar(args):
+    """主体识别"""
+    ai = VolcEngineAI()
+    try:
+        print(f"🔍 开始主体识别，版本: {args.version}")
+
+        result = ai.jm_detect_avatar(args.image_url, args.version)
+
+        if result.get("status") == "done":
+            contains = result.get("contains_subject", 0)
+            print(f"✅ 主体识别完成：{'包含主体' if contains == 1 else '不包含主体'}")
+
+            if contains == 1:
+                print("🎉 图片适合生成数字人视频！")
+                # 显示主体信息
+                if "resp_data" in result:
+                    resp_data = result["resp_data"]
+                    if isinstance(resp_data, dict):
+                        role_id = resp_data.get("role_id")
+                        if role_id:
+                            print(f"🆔 主体ID: {role_id}")
+            else:
+                print("⚠️ 图片中未检测到人、类人、拟人等主体，请更换图片")
+        else:
+            print(f"❌ 主体识别失败: {result}")
+
+    except Exception as e:
+        print(f"❌ 主体识别失败: {str(e)}")
+
+def jm_detect_object_handler(args):
+    """对象检测"""
+    class Args:
+        def __init__(self):
+            self.image_url = args.image_url
+
+    jm_detect_object(Args())
+
+def jm_detect_object(args):
+    """对象检测"""
+    ai = VolcEngineAI()
+    try:
+        print(f"🔍 开始对象检测（仅1.5版支持）")
+
+        result = ai.jm_detect_object(args.image_url)
+
+        if result.get("status") == "done":
+            print("✅ 对象检测完成！")
+
+            # 显示检测到的对象信息
+            if "resp_data" in result:
+                resp_data = result["resp_data"]
+                if isinstance(resp_data, dict):
+                    contains_object = resp_data.get("contains_object", 0)
+                    print(f"📊 检测结果：{'包含对象' if contains_object == 1 else '不包含对象'}")
+
+                    if contains_object == 1:
+                        object_count = resp_data.get("object_count", 0)
+                        print(f"🔢 检测到 {object_count} 个对象")
+
+                        # 显示mask图URL
+                        mask_urls = resp_data.get("mask_urls", [])
+                        if mask_urls:
+                            print(f"🖼️ Mask图片数量: {len(mask_urls)}")
+                            for i, mask_url in enumerate(mask_urls, 1):
+                                print(f"   {i}. {mask_url}")
+                            print("💡 可以使用mask_url参数指定特定对象生成视频")
+                    else:
+                        print("⚠️ 图片中未检测到有效对象，请更换图片")
+        else:
+            print(f"❌ 对象检测失败: {result}")
+
+    except Exception as e:
+        print(f"❌ 对象检测失败: {str(e)}")
+
+def jm_create_handler(args):
+    """生成视频"""
+    class Args:
+        def __init__(self):
+            self.image_url = args.image_url
+            self.audio_url = args.audio_url
+            self.version = args.version
+            self.prompt = args.prompt
+            self.mask_url = args.mask_url
+            self.seed = args.seed
+            self.pe_fast_mode = args.pe_fast_mode
+
+    jm_create_video(Args())
+
+def jm_create_video(args):
+    """生成数字人视频"""
+    ai = VolcEngineAI()
+    try:
+        print(f"🎬 开始生成数字人视频，版本: {args.version}")
+        print(f"📷 图片URL: {args.image_url}")
+        print(f"🎵 音频URL: {args.audio_url}")
+
+        # 显示额外参数
+        if args.prompt:
+            print(f"💭 提示词: {args.prompt}")
+        if args.mask_url:
+            print(f"🎭 Mask图数量: {len(args.mask_url)}")
+        if args.seed:
+            print(f"🎲 随机种子: {args.seed}")
+        if args.pe_fast_mode:
+            print("⚡ 快速模式: 开启")
+
+        result = ai.jm_create_video(
+            args.image_url,
+            args.audio_url,
+            args.version,
+            args.prompt,
+            args.mask_url,
+            args.seed,
+            args.pe_fast_mode
+        )
+
+        if result.get("status") == "done":
+            print("🎉 数字人视频生成完成！")
+            video_url = result.get("video_url")
+            if video_url:
+                print(f"📹 视频URL: {video_url}")
+                print(f"🆔 任务ID: {result.get('task_id')}")
+            else:
+                print("⚠️ 视频生成完成，但未获取到视频URL")
+        else:
+            print(f"❌ 视频生成失败: {result}")
+
+    except Exception as e:
+        print(f"❌ 视频生成失败: {str(e)}")
+
+def jm_query_handler(args):
+    """查询状态"""
+    class Args:
+        def __init__(self):
+            self.task_id = args.task_id
+            self.operation_type = args.operation_type
+            self.version = args.version
+            self.download = args.download
+            self.filename = args.filename
+
+    jm_query_result(Args())
+
+def jm_query_result(args):
+    """查询即梦AI任务结果"""
+    ai = VolcEngineAI()
+    try:
+        print(f"🔍 查询即梦AI任务ID: {args.task_id}")
+        print(f"📋 操作类型: {args.operation_type}")
+        print(f"🔢 版本: {args.version}")
+
+        result = ai.jm_query_result(args.task_id, args.operation_type, args.version)
+
+        if result.get("status") == "done":
+            print("✅ 任务完成！")
+
+            if args.operation_type == "generate":
+                # 视频生成结果
+                video_url = result.get("video_url")
+                if video_url:
+                    print(f"📹 视频URL: {video_url}")
+
+                    if args.download:
+                        filename = args.filename or f"jimeng_video_{args.task_id}.mp4"
+                        print(f"📥 开始下载视频到: {filename}")
+
+                        # 这里可以添加下载逻辑，但需要实现下载功能
+                        print("💡 下载功能需要额外实现")
+                    else:
+                        print("💡 使用 --download 参数可下载视频")
+                else:
+                    print("⚠️ 未获取到视频URL")
+
+            elif args.operation_type == "detect":
+                # 主体识别结果
+                contains = result.get("contains_subject", 0)
+                print(f"👤 主体识别: {'包含主体' if contains == 1 else '不包含主体'}")
+
+                if contains == 1 and "resp_data" in result:
+                    resp_data = result["resp_data"]
+                    if isinstance(resp_data, dict) and "role_id" in resp_data:
+                        print(f"🆔 主体ID: {resp_data['role_id']}")
+
+            elif args.operation_type == "detect_object":
+                # 对象检测结果
+                contains_object = result.get("contains_object", 0)
+                print(f"🎭 对象检测: {'包含对象' if contains_object == 1 else '不包含对象'}")
+
+                if contains_object == 1 and "resp_data" in result:
+                    resp_data = result["resp_data"]
+                    if isinstance(resp_data, dict):
+                        object_count = resp_data.get("object_count", 0)
+                        print(f"🔢 对象数量: {object_count}")
+
+        elif result.get("status") == "failed":
+            print("❌ 任务失败")
+            if "resp_data" in result:
+                resp_data = result["resp_data"]
+                if isinstance(resp_data, dict):
+                    error_msg = resp_data.get("msg", "未知错误")
+                    print(f"❌ 错误信息: {error_msg}")
+
+        else:
+            print(f"📊 任务状态: {result.get('status', 'unknown')}")
+            print("💡 任务仍在处理中，请稍后再次查询")
+
+    except Exception as e:
+        print(f"❌ 查询失败: {str(e)}")
+
 
 def main():
     """统一入口主函数"""
@@ -860,7 +1118,46 @@ def main():
     vl_query.add_argument('--filename', help='保存文件名')
     vl_query.set_defaults(func=vl_query_handler)
 
-      # === 形象管理 (va) - 添加到va子命令中 ===
+    # === 即梦AI数字人 (jm) ===
+    jm_parser = subparsers.add_parser('jm', help='即梦AI多功能生成平台')
+    jm_subparsers = jm_parser.add_subparsers(dest='jm_action', help='即梦AI数字人操作')
+
+    # jm omni - OmniHuman数字人视频
+    jm_omni_parser = jm_subparsers.add_parser('omni', help='即梦OmniHuman数字人视频')
+    jm_omni_subparsers = jm_omni_parser.add_subparsers(dest='jm_omni_action', help='即梦OmniHuman数字人视频操作')
+
+    # jm omni detect-avatar - 主体识别
+    jm_omni_detect = jm_omni_subparsers.add_parser('detect-avatar', help='即梦数字人 - 主体识别')
+    jm_omni_detect.add_argument('image_url', help='图片URL')
+    jm_omni_detect.add_argument('--version', choices=['1.0', '1.5'], default='1.5', help='版本选择 (1.0: 480P基础版, 1.5: 1080P增强版)')
+    jm_omni_detect.set_defaults(func=jm_detect_avatar_handler)
+
+    # jm omni detect-object - 对象检测
+    jm_omni_detect_object = jm_omni_subparsers.add_parser('detect-object', help='即梦数字人 - 对象检测（1.5版）')
+    jm_omni_detect_object.add_argument('image_url', help='图片URL')
+    jm_omni_detect_object.set_defaults(func=jm_detect_object_handler)
+
+    # jm omni create - 生成视频
+    jm_omni_create = jm_omni_subparsers.add_parser('create', help='即梦数字人 - 生成视频')
+    jm_omni_create.add_argument('image_url', help='图片URL')
+    jm_omni_create.add_argument('audio_url', help='音频URL')
+    jm_omni_create.add_argument('--version', choices=['1.0', '1.5'], default='1.5', help='版本选择 (1.0: 480P基础版, 1.5: 1080P增强版)')
+    jm_omni_create.add_argument('--prompt', help='提示词（仅1.5版支持）')
+    jm_omni_create.add_argument('--mask-url', nargs='+', help='mask图URL列表（仅1.5版，用于指定主体）')
+    jm_omni_create.add_argument('--seed', type=int, help='随机种子（仅1.5版）')
+    jm_omni_create.add_argument('--pe-fast-mode', action='store_true', help='启用快速模式（仅1.5版）')
+    jm_omni_create.set_defaults(func=jm_create_handler)
+
+    # jm omni query - 查询状态
+    jm_omni_query = jm_omni_subparsers.add_parser('query', help='即梦数字人 - 查询状态')
+    jm_omni_query.add_argument('task_id', help='任务ID')
+    jm_omni_query.add_argument('--operation-type', choices=['detect', 'detect_object', 'generate'], default='generate', help='操作类型')
+    jm_omni_query.add_argument('--version', choices=['1.0', '1.5'], default='1.5', help='版本选择')
+    jm_omni_query.add_argument('--download', action='store_true', help='下载结果到本地')
+    jm_omni_query.add_argument('--filename', help='保存文件名')
+    jm_omni_query.set_defaults(func=jm_query_handler)
+
+    # === 形象管理 (va) - 添加到va子命令中 ===
     va_avatars = va_subparsers.add_parser('avatars', help='查看可用形象')
     va_avatars.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='按模式筛选')
     va_avatars.set_defaults(func=va_avatars_handler)
@@ -896,6 +1193,17 @@ def main():
             vl_parser.print_help()
             return
         args.func(args)
+    elif args.command == 'jm':
+        if not args.jm_action:
+            jm_parser.print_help()
+            return
+        elif args.jm_action == 'omni':
+            if not args.jm_omni_action:
+                jm_omni_parser.print_help()
+                return
+            args.func(args)
+        else:
+            jm_parser.print_help()
 
 
 if __name__ == "__main__":
