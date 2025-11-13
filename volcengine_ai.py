@@ -326,19 +326,19 @@ def generate_effect_video(args):
             print(f"🆔 任务ID: {task_id}")
             print(f"📹 视频URL: {video_url}")
             print("💡 可以使用以下命令下载视频:")
-            print(f"   python volcengine_ai.py query-effect-video --task-id {task_id} --download")
+            print(f"   python volcengine_ai.py ve query {task_id} --download")
         else:
             # 仅提交任务的结果（任务ID）
             print(f"✅ 特效视频任务已提交")
             print(f"🆔 任务ID: {result}")
             print("💡 可以使用以下命令查询状态:")
-            print(f"   python volcengine_ai.py query-effect-video --task-id {result}")
+            print(f"   python volcengine_ai.py ve query {result} --download")
     except Exception as e:
         print(f"❌ 生成失败: {str(e)}")
         if "两张图片链接" in str(e):
             print("💡 双图模板使用示例:")
-            print("   V1版本: python volcengine_ai.py generate-effect-video --image-url 'https://person1.jpg|https://person2.jpg' --template-id double_embrace")
-            print("   V2版本: python volcengine_ai.py generate-effect-video --image-url 'https://person1.jpg|https://person2.jpg' --template-id french_kiss_dual_version")
+            print("   V1版本: python volcengine_ai.py ve create 'https://person1.jpg|https://person2.jpg' double_embrace")
+            print("   V2版本: python volcengine_ai.py ve create 'https://person1.jpg|https://person2.jpg' french_kiss_dual_version")
 
 
 def query_effect_video(args):
@@ -492,7 +492,7 @@ def list_effect_templates():
     print("  - V2双图模板: french_kiss_dual_version 系列，需要用'|'连接两个图片URL")
     print("  - V2的emoji小人变身_480p不支持分屏功能")
     print(f"🎯 模板总数: {len(v1_templates) + len(v2_templates)} 个模板")
-    print("🔍 使用示例: python volcengine_ai.py generate-effect-video --image-url '图片URL' --template-id 模板ID")
+    print("🔍 使用示例: python volcengine_ai.py ve create '图片URL' '模板ID'")
 
 
 def generate_all(args):
@@ -515,7 +515,95 @@ def generate_all(args):
         print(f"❌ 生成失败: {str(e)}")
         if "超时" in str(e):
             print("💡 建议: 可以单独查询任务状态")
-            print(f"   python volcengine_ai.py query-video --task-id 视频任务ID --mode {args.mode}")
+            print("   请使用上面日志中显示的视频任务ID进行查询")
+            print(f"   python volcengine_ai.py va query-video <视频任务ID> --mode {args.mode}")
+
+
+# === 新命令处理器 ===
+
+# 音频驱动 (va) 处理器
+def va_create_avatar_handler(args):
+    """创建数字形象"""
+    class Args:
+        def __init__(self):
+            self.image_url = args.image_url
+            self.mode = args.mode
+
+    create_avatar(Args())
+
+def va_query_avatar_handler(args):
+    """查询形象创建状态"""
+    class Args:
+        def __init__(self):
+            self.task_id = args.task_id
+            self.mode = args.mode
+
+    query_avatar(Args())
+
+def va_create_video_handler(args):
+    """生成角色视频"""
+    class Args:
+        def __init__(self):
+            self.resource_id = args.resource_id
+            self.audio_url = args.audio_url
+            self.mode = args.mode
+
+    generate_video(Args())
+
+def va_query_video_handler(args):
+    """查询视频生成状态"""
+    class Args:
+        def __init__(self):
+            self.task_id = args.task_id
+            self.mode = args.mode
+            self.download = args.download
+            self.filename = args.filename
+
+    query_video(Args())
+
+def va_create_handler(args):
+    """一键生成完整流程"""
+    class Args:
+        def __init__(self):
+            self.image_url = args.image_url
+            self.audio_url = args.audio_url
+            self.mode = args.mode
+
+    generate_all(Args())
+
+# 特效视频 (ve) 处理器
+def ve_create_handler(args):
+    """生成创意特效视频"""
+    class Args:
+        def __init__(self):
+            self.image_url = args.image_url
+            self.template_id = args.template_id
+            self.final_stitch_switch = args.final_stitch_switch
+
+    generate_effect_video(Args())
+
+def ve_query_handler(args):
+    """查询特效视频生成状态"""
+    class Args:
+        def __init__(self):
+            self.task_id = args.task_id
+            self.download = args.download
+            self.filename = args.filename
+
+    query_effect_video(Args())
+
+def ve_templates_handler(args):
+    """列出可用的特效模板"""
+    list_effect_templates()
+
+# 音频驱动 (va) 额外处理器
+def va_avatars_handler(args):
+    """查看可用形象"""
+    class Args:
+        def __init__(self):
+            self.mode = args.mode
+
+    list_avatars(Args())
 
 
 def main():
@@ -523,68 +611,70 @@ def main():
     parser = argparse.ArgumentParser(description="火山引擎AI平台")
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 
-    # 创建形象
-    parser_create = subparsers.add_parser('create-avatar', help='创建数字形象')
-    parser_create.add_argument('--image-url', required=True, help='图片URL')
-    parser_create.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
-    parser_create.set_defaults(func=create_avatar)
+    # === 音频驱动 (va) ===
+    va_parser = subparsers.add_parser('va', help='音频驱动视频生成')
+    va_subparsers = va_parser.add_subparsers(dest='va_action', help='音频驱动操作')
 
-    # 查询形象状态
-    parser_query_avatar = subparsers.add_parser('query-avatar', help='查询形象创建状态')
-    parser_query_avatar.add_argument('--task-id', required=True, help='任务ID')
-    parser_query_avatar.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], required=True, help='创建时使用的模式')
-    parser_query_avatar.set_defaults(func=query_avatar)
+    # va create-avatar
+    va_create_avatar = va_subparsers.add_parser('create-avatar', help='创建数字形象')
+    va_create_avatar.add_argument('image_url', help='图片URL')
+    va_create_avatar.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
+    va_create_avatar.set_defaults(func=va_create_avatar_handler)
 
-    # 生成视频
-    parser_video = subparsers.add_parser('generate-video', help='生成角色视频')
-    parser_video.add_argument('--resource-id', required=True, help='形象ID')
-    parser_video.add_argument('--audio-url', required=True, help='音频URL')
-    parser_video.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
-    parser_video.set_defaults(func=generate_video)
+    # va query-avatar
+    va_query_avatar = va_subparsers.add_parser('query-avatar', help='查询形象创建状态')
+    va_query_avatar.add_argument('task_id', help='任务ID')
+    va_query_avatar.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], required=True, help='创建时使用的模式')
+    va_query_avatar.set_defaults(func=va_query_avatar_handler)
 
-    # 查询视频状态
-    parser_query_video = subparsers.add_parser('query-video', help='查询视频生成状态')
-    parser_query_video.add_argument('--task-id', required=True, help='任务ID')
-    parser_query_video.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], required=True, help='生成时使用的模式')
-    parser_query_video.add_argument('--download', action='store_true', help='下载视频到本地')
-    parser_query_video.add_argument('--filename', help='保存文件名')
-    parser_query_video.set_defaults(func=query_video)
+    # va create-video
+    va_create_video = va_subparsers.add_parser('create-video', help='生成角色视频')
+    va_create_video.add_argument('resource_id', help='形象ID')
+    va_create_video.add_argument('audio_url', help='音频URL')
+    va_create_video.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
+    va_create_video.set_defaults(func=va_create_video_handler)
 
-    # 一键生成
-    parser_all = subparsers.add_parser('generate-all', help='一键生成完整流程')
-    parser_all.add_argument('--image-url', required=True, help='图片URL')
-    parser_all.add_argument('--audio-url', required=True, help='音频URL')
-    parser_all.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
-    parser_all.set_defaults(func=generate_all)
+    # va query-video
+    va_query_video = va_subparsers.add_parser('query-video', help='查询视频生成状态')
+    va_query_video.add_argument('task_id', help='任务ID')
+    va_query_video.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], required=True, help='生成时使用的模式')
+    va_query_video.add_argument('--download', action='store_true', help='下载视频到本地')
+    va_query_video.add_argument('--filename', help='保存文件名')
+    va_query_video.set_defaults(func=va_query_video_handler)
 
-    # 列出保存的形象
-    parser_list = subparsers.add_parser('list-avatars', help='列出保存的形象')
-    parser_list.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='按模式筛选')
-    parser_list.set_defaults(func=list_avatars)
+    # va create (一键生成)
+    va_create = va_subparsers.add_parser('create', help='一键生成视频（形象+视频）')
+    va_create.add_argument('image_url', help='图片URL')
+    va_create.add_argument('audio_url', help='音频URL')
+    va_create.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
+    va_create.set_defaults(func=va_create_handler)
 
-    # 使用最新形象生成视频
-    parser_use_latest = subparsers.add_parser('use-latest-avatar', help='使用最新的形象生成视频')
-    parser_use_latest.add_argument('--audio-url', required=True, help='音频URL')
-    parser_use_latest.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='指定模式的最新形象')
-    parser_use_latest.set_defaults(func=use_latest_avatar)
+    # === 特效视频 (ve) ===
+    ve_parser = subparsers.add_parser('ve', help='创意特效视频生成')
+    ve_subparsers = ve_parser.add_subparsers(dest='ve_action', help='特效视频操作')
 
-    # 生成特效视频
-    parser_effect = subparsers.add_parser('generate-effect-video', help='生成创意特效视频')
-    parser_effect.add_argument('--image-url', required=True, help='图片URL')
-    parser_effect.add_argument('--template-id', required=True, help='特效模板ID')
-    parser_effect.add_argument('--final-stitch-switch', type=bool, default=True, help='分屏设置 (false: 开启上下分屏, true: 关闭分屏)')
-    parser_effect.set_defaults(func=generate_effect_video)
+    # ve create
+    ve_create = ve_subparsers.add_parser('create', help='生成创意特效视频')
+    ve_create.add_argument('image_url', help='图片URL')
+    ve_create.add_argument('template_id', help='特效模板ID')
+    ve_create.add_argument('--final-stitch-switch', type=bool, default=True, help='分屏设置 (false: 开启上下分屏, true: 关闭分屏)')
+    ve_create.set_defaults(func=ve_create_handler)
 
-    # 查询特效视频状态
-    parser_query_effect = subparsers.add_parser('query-effect-video', help='查询特效视频生成状态')
-    parser_query_effect.add_argument('--task-id', required=True, help='任务ID')
-    parser_query_effect.add_argument('--download', action='store_true', help='下载视频到本地')
-    parser_query_effect.add_argument('--filename', help='保存文件名')
-    parser_query_effect.set_defaults(func=query_effect_video)
+    # ve query
+    ve_query = ve_subparsers.add_parser('query', help='查询特效视频生成状态')
+    ve_query.add_argument('task_id', help='任务ID')
+    ve_query.add_argument('--download', action='store_true', help='下载视频到本地')
+    ve_query.add_argument('--filename', help='保存文件名')
+    ve_query.set_defaults(func=ve_query_handler)
 
-    # 列出特效模板
-    parser_list_templates = subparsers.add_parser('list-effect-templates', help='列出可用的特效模板')
-    parser_list_templates.set_defaults(func=lambda args: list_effect_templates())
+    # ve templates
+    ve_templates = ve_subparsers.add_parser('templates', help='列出可用的特效模板')
+    ve_templates.set_defaults(func=ve_templates_handler)
+
+      # === 形象管理 (va) - 添加到va子命令中 ===
+    va_avatars = va_subparsers.add_parser('avatars', help='查看可用形象')
+    va_avatars.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='按模式筛选')
+    va_avatars.set_defaults(func=va_avatars_handler)
 
     args = parser.parse_args()
 
@@ -602,7 +692,16 @@ def main():
         return
 
     # 执行对应命令
-    args.func(args)
+    if args.command == 'va':
+        if not args.va_action:
+            va_parser.print_help()
+            return
+        args.func(args)
+    elif args.command == 've':
+        if not args.ve_action:
+            ve_parser.print_help()
+            return
+        args.func(args)
 
 
 if __name__ == "__main__":

@@ -453,7 +453,7 @@ class VideoEffectClient:
         except Exception as e:
             raise Exception(f"获取结果失败: {str(e)}")
 
-    def wait_for_completion(self, task_id: str, max_wait_time: int = 600, check_interval: int = 5) -> Dict[str, Any]:
+    def wait_for_completion(self, task_id: str, max_wait_time: int = 600, check_interval: int = 15) -> Dict[str, Any]:
         """
         等待任务完成
 

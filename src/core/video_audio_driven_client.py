@@ -380,7 +380,7 @@ class VideoAudioDrivenClient:
         except Exception as e:
             raise Exception(f"获取视频生成结果失败: {str(e)}")
 
-    def wait_for_completion(self, task_id: str, mode: str, operation_type: str, max_wait_time: int = 300, check_interval: int = 5) -> Dict[str, Any]:
+    def wait_for_completion(self, task_id: str, mode: str, operation_type: str, max_wait_time: int = 300, check_interval: int = 15) -> Dict[str, Any]:
         """
         等待任务完成
 
@@ -459,7 +459,7 @@ class VideoAudioDrivenClient:
         # 步骤2：生成视频
         print("步骤2：生成视频...")
         video_task_id = self.generate_video(resource_id, audio_url, mode, aigc_meta)
-        video_result = self.wait_for_completion(video_task_id, mode, "video")
+        video_result = self.wait_for_completion(video_task_id, mode, "video", max_wait_time=600)
 
         print("视频生成完成！")
         return {
