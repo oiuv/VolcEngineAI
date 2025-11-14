@@ -288,26 +288,79 @@ def generate_video(args):
         task_id = ai.generate_avatar_video(args.resource_id, args.audio_url, args.mode)
         print(f"✅ 视频生成任务已提交")
         print(f"🆔 任务ID: {task_id}")
+        return task_id
     except Exception as e:
         print(f"❌ 生成失败: {str(e)}")
+        return None
 
 
 def query_video(args):
-    """查询视频状态"""
+    """查询视频状态（循环等待直到完成）"""
+    import time
     ai = VolcEngineAI()
+    start_time = time.time()
+    max_wait_time = 600  # 10分钟
+    check_interval = 15  # 15秒检查一次
+
     try:
-        print(f"🔍 查询任务ID: {args.task_id} ({args.mode}模式)")
+        print(f"🔍 开始查询任务ID: {args.task_id} ({args.mode}模式)")
+        print(f"⏰ 最大等待时间: {max_wait_time}秒，每{check_interval}秒检查一次")
 
-        result = ai.get_video_result(args.task_id, args.mode)
+        while time.time() - start_time < max_wait_time:
+            try:
+                result = ai.get_video_result(args.task_id, args.mode)
+                print(f"📋 API响应: {result}")
 
-        # 直接显示API原始响应
-        print(f"📋 API原始响应: {result}")
+                # 检查任务状态
+                if isinstance(result, dict):
+                    status = result.get("status", "unknown")
+                    if status == "done":
+                        print(f"✅ 任务完成！")
 
-        # 检测到成功状态时自动下载视频
-        if isinstance(result, dict) and result.get("status") == "done" and result.get("video_url"):
-            video_url = result["video_url"]
-            filename = args.filename or f"video_{args.task_id}.mp4"
-            download_video(video_url, filename)
+                        # 下载视频
+                        if result.get("video_url"):
+                            video_url = result["video_url"]
+                            filename = args.filename or f"video_{args.task_id}.mp4"
+                            download_video(video_url, filename)
+                            print("\n🎉 视频生成完成！")
+                            print("=" * 50)
+                            print(f"🆔 任务ID: {args.task_id}")
+                            print(f"📹 视频URL: {video_url}")
+                            print("=" * 50)
+                        return
+
+                    elif status in ["not_found", "expired"]:
+                        print(f"❌ 任务异常: {status}")
+                        return
+
+                    elif result.get("video_url"):
+                        # 如果有video_url说明任务已完成
+                        print(f"✅ 任务完成！")
+                        video_url = result["video_url"]
+                        filename = args.filename or f"video_{args.task_id}.mp4"
+                        download_video(video_url, filename)
+                        print("\n🎉 视频生成完成！")
+                        print("=" * 50)
+                        print(f"🆔 任务ID: {args.task_id}")
+                        print("=" * 50)
+                        return
+
+                    else:
+                        # 优先使用API返回的中文message，如果没有则使用status
+                        message = result.get("message", f"任务状态: {status}")
+                        print(f"⏳ 任务进行中... {message}")
+
+                else:
+                    print(f"⏳ 任务进行中... 状态: {result}")
+
+                time.sleep(check_interval)
+
+            except Exception as e:
+                print(f"⚠️ 查询出错: {str(e)}，{check_interval}秒后重试...")
+                time.sleep(check_interval)
+
+        print(f"⏰ 等待超时 ({max_wait_time}秒)，任务可能仍在处理")
+        print(f"💡 提示: 可手动继续查询: python volcengine_ai.py va query-video {args.task_id} --mode {args.mode}")
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
@@ -422,30 +475,72 @@ def generate_effect_video(args):
 
 
 def query_effect_video(args):
-    """查询特效视频状态"""
+    """查询特效视频状态（循环等待直到完成）"""
+    import time
     ai = VolcEngineAI()
+    start_time = time.time()
+    max_wait_time = 600  # 10分钟
+    check_interval = 15  # 15秒检查一次
+
     try:
-        print(f"🔍 查询特效视频任务ID: {args.task_id}")
+        print(f"🔍 开始查询特效视频任务ID: {args.task_id}")
+        print(f"⏰ 最大等待时间: {max_wait_time}秒，每{check_interval}秒检查一次")
 
-        result = ai.get_effect_video_result(args.task_id)
+        while time.time() - start_time < max_wait_time:
+            try:
+                result = ai.get_effect_video_result(args.task_id)
+                print(f"📋 API响应: {result}")
 
-        # 直接显示API的原始响应
-        print(f"📋 API原始响应: {result}")
+                # 检查任务状态
+                if isinstance(result, dict) and result.get("code") == 10000:
+                    data = result.get("data", {})
+                    status = data.get("status")
 
-        # 如果API返回完成且有视频URL，自动下载
-        if isinstance(result, dict) and result.get("code") == 10000:
-            data = result.get("data", {})
-            if data.get("status") == "done":
-                resp_data_str = data.get("resp_data", "{}")
-                try:
-                    import json
-                    resp_data = json.loads(resp_data_str)
-                    video_url = resp_data.get("video_url")
-                    if video_url:
-                        filename = args.filename or f"effect_video_{args.task_id}.mp4"
-                        download_video(video_url, filename)
-                except:
-                    pass
+                    if status == "done":
+                        print(f"✅ 任务完成！")
+
+                        # 解析resp_data获取视频URL
+                        resp_data_str = data.get("resp_data", "{}")
+                        try:
+                            import json
+                            resp_data = json.loads(resp_data_str)
+                            video_url = resp_data.get("video_url")
+                            if video_url:
+                                filename = args.filename or f"effect_video_{args.task_id}.mp4"
+                                download_video(video_url, filename)
+                                print("\n🎉 特效视频生成完成！")
+                                print("=" * 50)
+                                print(f"🆔 任务ID: {args.task_id}")
+                                print(f"📹 视频URL: {video_url}")
+                                print("=" * 50)
+                            return
+                        except:
+                            print("\n🎉 特效视频生成完成！")
+                            print("=" * 50)
+                            print(f"🆔 任务ID: {args.task_id}")
+                            print("=" * 50)
+                            return
+
+                    elif status in ["not_found", "expired"]:
+                        print(f"❌ 任务异常: {status}")
+                        return
+
+                    else:
+                        # 优先使用API返回的中文message，如果没有则使用status
+                        message = data.get("message", f"任务状态: {status}")
+                        print(f"⏳ 任务进行中... {message}")
+
+                else:
+                    print(f"⏳ 任务进行中... 状态: {result}")
+
+                time.sleep(check_interval)
+
+            except Exception as e:
+                print(f"⚠️ 查询出错: {str(e)}，{check_interval}秒后重试...")
+                time.sleep(check_interval)
+
+        print(f"⏰ 等待超时 ({max_wait_time}秒)，任务可能仍在处理")
+        print(f"💡 提示: 可手动继续查询: python volcengine_ai.py ve query {args.task_id}")
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
@@ -705,50 +800,62 @@ def list_effect_templates():
 
 
 def generate_all(args):
-    """一键生成完整流程"""
-    ai = VolcEngineAI()
+    """一键生成完整流程（模块化组合）"""
     try:
         print(f"开始生成视频（{args.mode}模式）...")
+        print("💡 提示: 视频生成需要3-10分钟，请耐心等待")
 
-        if hasattr(args, 'no_wait') and args.no_wait:
-            print("📝 创建形象并提交视频任务，不等待视频生成完成")
-            print("💡 提示: 视频任务提交后可使用查询命令检查状态")
+        # 步骤1：创建形象（使用现有的create_avatar函数）
+        print("步骤1：创建数字形象...")
+        create_avatar(args)
 
-            # 创建形象并等待完成（快速）
-            print("步骤1：创建数字形象...")
-            role_task_id = ai.create_avatar(args.image_url, args.mode)
-            role_result = ai.get_avatar_result(role_task_id, args.mode)
-            resource_id = role_result["resource_id"]
-            print(f"✅ 形象创建成功！ID: {resource_id}")
+        # 步骤2：生成视频（需要从create_avatar的结果中获取resource_id）
+        # create_avatar已经保存到本地，可以直接读取
+        from src.modules.avatar_manager import avatar_manager
+        latest_avatar = avatar_manager.get_latest_avatar(args.mode)
+        if not latest_avatar:
+            raise Exception("无法获取刚创建的形象信息")
 
-            # 提交视频任务但不等待
-            print("步骤2：提交视频生成任务...")
-            video_task_id = ai.generate_avatar_video(resource_id, args.audio_url, args.mode)
-            print(f"✅ 视频任务已提交")
-            print(f"🆔 视频任务ID: {video_task_id}")
-            print(f"💡 查询视频状态: python volcengine_ai.py va query-video {video_task_id} --mode {args.mode}")
-            print(f"💡 下载视频: python volcengine_ai.py va query-video {video_task_id} --mode {args.mode} --download")
-        else:
-            print("💡 提示: 视频生成需要3-10分钟，请耐心等待")
-            print("🚀 如不想等待视频生成，可使用 --no-wait 参数")
+        resource_id = latest_avatar['resource_id']
+        print(f"📝 使用形象ID: {resource_id}")
 
-            result = ai.generate_avatar_video_from_image_audio(
-                image_url=args.image_url,
-                audio_url=args.audio_url,
-                mode=args.mode,
-                max_wait_time=0  # 0表示不限制超时时间
-            )
-            print("🎉 视频生成成功！")
-            print(f"📹 视频URL: {result['video_url']}")
-            print(f"🆔 形象ID: {result['resource_id']}")
+        # 步骤3：生成视频并查询（使用现有的generate_video + query_video）
+        print("步骤2：生成视频...")
+
+        class VideoArgs:
+            def __init__(self):
+                self.resource_id = resource_id
+                self.audio_url = args.audio_url
+                self.mode = args.mode
+
+        # 使用组合函数：generate_video + query_video
+        generate_video_with_query(VideoArgs())
 
     except Exception as e:
         print(f"❌ 生成失败: {str(e)}")
         if "超时" in str(e):
-            print("💡 建议: 使用 --no-wait 参数只提交视频任务，不等待生成完成")
-            print("💡 或者可以单独查询任务状态")
-            print("   请使用上面日志中显示的视频任务ID进行查询")
-            print(f"   python volcengine_ai.py va query-video <视频任务ID> --mode {args.mode}")
+            print("💡 建议: 可以单独查询任务状态")
+
+
+def generate_video_with_query(args):
+    """生成视频并查询结果（模块化组合）"""
+    # 步骤1：生成视频（提交任务）
+    task_id = generate_video(args)
+    if not task_id:
+        raise Exception("视频任务提交失败")
+
+    # 步骤2：查询视频状态（使用现有的query_video函数）
+    print("⏳ 等待视频生成完成...")
+
+    # 创建一个临时的args对象来传递给query_video
+    class QueryArgs:
+        def __init__(self):
+            self.task_id = task_id
+            self.mode = args.mode
+            self.download = True  # 总是下载
+            self.filename = None
+
+    query_video(QueryArgs())
 
 
 # === 新命令处理器 ===
@@ -800,7 +907,6 @@ def va_create_handler(args):
             self.image_url = args.image_url
             self.audio_url = args.audio_url
             self.mode = args.mode
-            self.no_wait = args.no_wait
 
     generate_all(Args())
 
@@ -1125,7 +1231,6 @@ def main():
     va_create.add_argument('image_url', help='图片URL')
     va_create.add_argument('audio_url', help='音频URL')
     va_create.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
-    va_create.add_argument('--no-wait', action='store_true', help='不等待完成，只提交任务后返回任务ID')
     va_create.set_defaults(func=va_create_handler)
 
     # === 特效视频 (ve) ===
