@@ -424,11 +424,11 @@ def use_latest_avatar(args):
         print(f"❌ 生成失败: {str(e)}")
 
 
-def generate_effect_video(args):
-    """生成创意特效视频"""
+def submit_effect_video_task(args):
+    """提交特效视频生成任务"""
     ai = VolcEngineAI()
     try:
-        print(f"🎨 开始生成创意特效视频...")
+        print(f"🎨 开始提交特效视频生成任务...")
         print(f"📷 图片URL: {args.image_url}")
         print(f"🎭 模板ID: {args.template_id}")
 
@@ -443,35 +443,45 @@ def generate_effect_video(args):
                 print(f"💕 提示: {version}版本模板 '{args.template_id}' 需要两张图片")
                 print(f"   请使用以下格式: --image-url '图片1.jpg|图片2.jpg'")
 
-        result = ai.generate_effect_video(
+        # 提交任务
+        task_id = ai._effect_client.submit_task(
             image_url=args.image_url,
             template_id=args.template_id,
             final_stitch_switch=args.final_stitch_switch
         )
 
-        # 检查返回结果类型
-        if isinstance(result, dict):
-            # 完整流程的结果（包含视频URL）
-            task_id = result.get('task_id')
-            video_url = result.get('video_url')
-            print(f"🎉 特效视频生成完成！")
-            print(f"🆔 任务ID: {task_id}")
-            print(f"📹 视频URL: {video_url}")
-            # 自动下载视频
-            filename = f"effect_video_{task_id}.mp4"
-            download_video(video_url, filename)
-        else:
-            # 仅提交任务的结果（任务ID）
-            print(f"✅ 特效视频任务已提交")
-            print(f"🆔 任务ID: {result}")
-            print("💡 可以使用以下命令查询状态:")
-            print(f"   python volcengine_ai.py ve query {result}")
+        print(f"✅ 特效视频任务已提交")
+        print(f"🆔 任务ID: {task_id}")
+        print("💡 可以使用以下命令查询状态:")
+        print(f"   python volcengine_ai.py ve query {task_id}")
+        return task_id
     except Exception as e:
-        print(f"❌ 生成失败: {str(e)}")
+        print(f"❌ 任务提交失败: {str(e)}")
         if "两张图片链接" in str(e):
             print("💡 双图模板使用示例:")
             print("   V1版本: python volcengine_ai.py ve create 'https://person1.jpg|https://person2.jpg' double_embrace")
             print("   V2版本: python volcengine_ai.py ve create 'https://person1.jpg|https://person2.jpg' french_kiss_dual_version")
+        return None
+
+
+def generate_effect_video(args):
+    """生成创意特效视频（模块化组合：提交任务+查询结果）"""
+    # 步骤1：提交任务
+    task_id = submit_effect_video_task(args)
+    if not task_id:
+        return
+
+    # 步骤2：查询结果（使用现有的query_effect_video函数）
+    print("⏳ 等待特效视频生成完成...")
+
+    # 创建一个临时的args对象来传递给query_effect_video
+    class QueryArgs:
+        def __init__(self):
+            self.task_id = task_id
+            self.download = True  # 总是下载
+            self.filename = None
+
+    query_effect_video(QueryArgs())
 
 
 def query_effect_video(args):
