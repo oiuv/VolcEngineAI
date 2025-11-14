@@ -530,7 +530,6 @@ class VideoEffectClient:
         if result.get("code") == 10000:
             data = result.get("data", {})
             if data.get("status") == "done":
-                print("🎉 特效视频生成成功！")
                 # resp_data是JSON字符串，需要解析
                 import json
                 resp_data_str = data.get("resp_data", "{}")

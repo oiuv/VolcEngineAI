@@ -84,10 +84,14 @@ VolcEngineAI/
   - 1.5版：主体识别 + 对象检测 + 视频生成（1080P，1.2元/秒，音频<35秒）
   - 支持提示词控制、多主体指定、情感表演、宠物/动漫形象
   - 智能处理：自动格式转码、参数验证、错误处理
-- **新命令结构**:
-  - `jm va <image-url> [--version 1.0|1.5]`  # 主体识别
-  - `jm va detect-object <image-url>`  # 对象检测（1.5版）
-  - `jm va create <image-url> <audio-url> [--version 1.0|1.5] [--prompt "..."] [--mask-url URL1 URL2] [--seed N] [--pe-fast-mode]`  # 生成视频
+  - 完整的任务流程：主体检测 → 对象检测(1.5版) → 视频生成
+  - 自动化体验：create-avatar 自动调用查询逻辑，无需手动查询
+- **命令结构**:
+  - `jm va detect <image-url> <prompt> [--mode 1.0|1.5]`  # 主体检测
+  - `jm va detect-object <subject-id> <detect-task-id> --mode 1.5`  # 对象检测（1.5版专用）
+  - `jm va generate <subject-id> <detect-task-id> <audio-url> [--mode 1.0|1.5] [--object-task-id ID]`  # 生成视频
+  - `jm va query <task-id> --mode <mode>`  # 查询结果
+  - `jm va create-avatar <image-url> <audio-url> <prompt> --mode <mode> [--subject-id ID] [--enable-object-detection] [--no-wait]`  # 一键生成
   - `jm query <task-id> [--operation-type detect|detect_object|generate] [--version 1.0|1.5] [--download]`
 
 ### 4. 创意特效视频生成 (VideoEffectClient)
@@ -181,6 +185,21 @@ python volcengine_ai.py ve query 789012 --download
 
 # 查看可用形象
 python volcengine_ai.py va avatars --mode loopyb
+
+# 即梦AI数字人生成 - 1.0版一键生成
+python volcengine_ai.py jm va create-avatar https://image.jpg https://audio.mp3 "一个微笑的年轻女性" --mode 1.0
+
+# 即梦AI数字人生成 - 1.5版带对象检测
+python volcengine_ai.py jm va create-avatar https://image.jpg https://audio.mp3 "一个穿着蓝色衬衫的男性" --mode 1.5 --subject-id 1 --enable-object-detection
+
+# 即梦AI分步操作 - 主体检测
+python volcengine_ai.py jm va detect https://image.jpg "一个可爱的宠物" --mode 1.5
+
+# 即梦AI分步操作 - 对象检测（1.5版）
+python volcengine_ai.py jm va detect-object 1 12345678 --mode 1.5
+
+# 即梦AI分步操作 - 查询结果
+python volcengine_ai.py jm va query 87654321 --mode 1.5
 ```
 
 ### 开发规范

@@ -187,12 +187,26 @@ class VolcEngineAI:
 
 
 def create_avatar(args):
-    """创建形象"""
+    """创建形象（自动查询并等待完成）"""
     ai = VolcEngineAI()
     try:
+        print(f"🎨 开始创建数字形象（{args.mode}模式）")
+        print(f"📷 图片URL: {args.image_url}")
+
         task_id = ai.create_avatar(args.image_url, args.mode)
         print(f"✅ 形象创建任务已提交")
         print(f"🆔 任务ID: {task_id}")
+        print("⏳ 正在等待处理完成...")
+
+        # 自动查询并等待完成（调用现有的query_avatar逻辑）
+        # 创建一个临时的args对象来传递给query_avatar
+        class QueryArgs:
+            def __init__(self):
+                self.task_id = task_id
+                self.mode = args.mode
+
+        query_avatar(QueryArgs())
+
     except Exception as e:
         print(f"❌ 创建失败: {str(e)}")
 
@@ -203,14 +217,65 @@ def query_avatar(args):
     try:
         print(f"🔍 查询任务ID: {args.task_id} ({args.mode}模式)")
 
-        result = ai.get_avatar_result(args.task_id, args.mode)
+        # 循环查询直到任务完成
+        import time
+        start_time = time.time()
+        max_wait_time = 600  # 最大等待10分钟
+        check_interval = 15  # 每15秒查询一次
 
-        # 直接显示API原始响应
-        print(f"📋 API原始响应: {result}")
+        while time.time() - start_time < max_wait_time:
+            try:
+                result = ai.get_avatar_result(args.task_id, args.mode)
 
-        # 如果有resource_id，保存形象信息
-        if isinstance(result, dict) and "resource_id" in result:
-            avatar_manager.save_avatar(args.task_id, result, args.mode, result.get("resp_data"))
+                # 显示当前状态
+                if isinstance(result, dict):
+                    status = result.get("status", "unknown")
+                    if status == "done":
+                        print(f"📋 API响应: {result}")
+
+                        # 保存形象信息
+                        if "resource_id" in result:
+                            avatar_manager.save_avatar(args.task_id, result, args.mode, result.get("resp_data"))
+                            print("\n🎉 数字形象创建完成！")
+                            print("=" * 50)
+                            print(f"🆔 形象ID: {result['resource_id']}")
+                            print(f"🎭 形象类型: {result.get('role_type', 'unknown')}")
+                            if result.get('face_position'):
+                                print(f"📍 人脸位置: {result['face_position']}")
+                            print("=" * 50)
+                        return
+
+                    elif status in ["not_found", "expired"]:
+                        print(f"❌ 任务异常: {status}")
+                        return
+
+                    elif "resource_id" in result:
+                        # 如果有resource_id说明任务已完成
+                        print(f"📋 API响应: {result}")
+                        avatar_manager.save_avatar(args.task_id, result, args.mode, result.get("resp_data"))
+                        print("\n🎉 数字形象创建完成！")
+                        print("=" * 50)
+                        print(f"🆔 形象ID: {result['resource_id']}")
+                        print("=" * 50)
+                        return
+
+                    else:
+                        # 优先使用API返回的中文message，如果没有则使用status
+                        message = result.get("message", f"任务状态: {status}")
+                        print(f"⏳ 任务进行中... {message}")
+                        print(f"📋 API响应: {result}")
+
+                else:
+                    print(f"⏳ 任务进行中... 状态: {result}")
+
+                time.sleep(check_interval)
+
+            except Exception as e:
+                print(f"⚠️ 查询出错: {str(e)}，{check_interval}秒后重试...")
+                time.sleep(check_interval)
+
+        print(f"⏰ 等待超时 ({max_wait_time}秒)，任务可能仍在处理")
+        print(f"💡 提示: 可手动继续查询: python volcengine_ai.py va query-avatar {args.task_id} --mode {args.mode}")
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
@@ -339,14 +404,15 @@ def generate_effect_video(args):
             print(f"🎉 特效视频生成完成！")
             print(f"🆔 任务ID: {task_id}")
             print(f"📹 视频URL: {video_url}")
-            print("💡 可以使用以下命令下载视频:")
-            print(f"   python volcengine_ai.py ve query {task_id} --download")
+            # 自动下载视频
+            filename = f"effect_video_{task_id}.mp4"
+            download_video(video_url, filename)
         else:
             # 仅提交任务的结果（任务ID）
             print(f"✅ 特效视频任务已提交")
             print(f"🆔 任务ID: {result}")
             print("💡 可以使用以下命令查询状态:")
-            print(f"   python volcengine_ai.py ve query {result} --download")
+            print(f"   python volcengine_ai.py ve query {result}")
     except Exception as e:
         print(f"❌ 生成失败: {str(e)}")
         if "两张图片链接" in str(e):
@@ -418,16 +484,66 @@ def query_lip_sync(args):
     try:
         print(f"🔍 查询任务ID: {args.task_id} ({args.mode}模式)")
 
-        result = ai.get_lip_sync_result(args.task_id, args.mode)
+        # 循环查询直到任务完成
+        import time
+        start_time = time.time()
+        max_wait_time = 600  # 最大等待10分钟
+        check_interval = 15  # 每15秒查询一次
 
-        # 直接显示API原始响应
-        print(f"📋 API原始响应: {result}")
+        while time.time() - start_time < max_wait_time:
+            try:
+                result = ai.get_lip_sync_result(args.task_id, args.mode)
 
-        # 检测到成功状态时自动下载视频
-        if isinstance(result, dict) and result.get("status") == "done" and result.get("video_url"):
-            video_url = result["video_url"]
-            filename = args.filename or f"lip_sync_video_{args.task_id}.mp4"
-            download_video(video_url, filename)
+                # 显示当前状态
+                if isinstance(result, dict):
+                    status = result.get("status", "unknown")
+                    if status == "done":
+                        print(f"📋 API响应: {result}")
+
+                        # 下载视频
+                        if result.get("video_url"):
+                            video_url = result["video_url"]
+                            filename = args.filename or f"lip_sync_video_{args.task_id}.mp4"
+                            download_video(video_url, filename)
+                            print("\n🎉 视频改口型完成！")
+                            print("=" * 50)
+                            print(f"🆔 任务ID: {args.task_id}")
+                            print(f"📹 视频URL: {video_url}")
+                            print("=" * 50)
+                        return
+
+                    elif status in ["not_found", "expired"]:
+                        print(f"❌ 任务异常: {status}")
+                        return
+
+                    elif result.get("video_url"):
+                        # 如果有video_url说明任务已完成
+                        print(f"📋 API响应: {result}")
+                        video_url = result["video_url"]
+                        filename = args.filename or f"lip_sync_video_{args.task_id}.mp4"
+                        download_video(video_url, filename)
+                        print("\n🎉 视频改口型完成！")
+                        print("=" * 50)
+                        print(f"🆔 任务ID: {args.task_id}")
+                        print("=" * 50)
+                        return
+
+                    else:
+                        # 优先使用API返回的中文message，如果没有则使用status
+                        message = result.get("message", f"任务状态: {status}")
+                        print(f"⏳ 任务进行中... {message}")
+
+                else:
+                    print(f"⏳ 任务进行中... 状态: {result}")
+
+                time.sleep(check_interval)
+
+            except Exception as e:
+                print(f"⚠️ 查询出错: {str(e)}，{check_interval}秒后重试...")
+                time.sleep(check_interval)
+
+        print(f"⏰ 等待超时 ({max_wait_time}秒)，任务可能仍在处理")
+        print(f"💡 提示: 可手动继续查询: python volcengine_ai.py vl query {args.task_id} --mode {args.mode}")
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
@@ -454,17 +570,26 @@ def change_lip_sync(args):
 
         print(f"开始视频改口型（{args.mode}模式）...")
 
-        result = ai.change_lip_sync(
+        # 提交视频改口型任务
+        task_id = ai.submit_lip_sync_task(
             args.video_url,
             args.audio_url,
             args.mode,
-            max_wait_time=600,
             **kwargs
         )
+        print(f"✅ 视频改口型任务已提交")
+        print(f"🆔 任务ID: {task_id}")
+        print("⏳ 正在等待处理完成...")
 
-        print("🎉 视频改口型完成！")
-        print(f"📹 视频URL: {result['video_url']}")
-        print(f"🆔 任务ID: {result['task_id']}")
+        # 调用query_lip_sync处理查询和下载
+        class QueryArgs:
+            def __init__(self):
+                self.task_id = task_id
+                self.mode = args.mode
+                self.download = True  # 总是下载
+                self.filename = None
+
+        query_lip_sync(QueryArgs())
 
     except Exception as e:
         print(f"❌ 视频改口型失败: {str(e)}")
@@ -972,11 +1097,11 @@ def main():
     # va create-avatar
     va_create_avatar = va_subparsers.add_parser('create-avatar', help='创建数字形象')
     va_create_avatar.add_argument('image_url', help='图片URL')
-    va_create_avatar.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], default='normal', help='模式选择')
+    va_create_avatar.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], required=True, help='模式选择')
     va_create_avatar.set_defaults(func=va_create_avatar_handler)
 
-    # va query-avatar
-    va_query_avatar = va_subparsers.add_parser('query-avatar', help='查询形象创建状态')
+    # va query-avatar (备用查询功能，用于重新查询或自动化查询失败时使用)
+    va_query_avatar = va_subparsers.add_parser('query-avatar', help='查询形象创建状态（备用功能）')
     va_query_avatar.add_argument('task_id', help='任务ID')
     va_query_avatar.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], required=True, help='创建时使用的模式')
     va_query_avatar.set_defaults(func=va_query_avatar_handler)

@@ -301,6 +301,7 @@ class VideoLipSyncClient:
                 if resp_data.get("code") == 0:
                     result = {
                         "status": status,
+                        "task_id": task_id,
                         "aigc_meta_tagged": data.get("aigc_meta_tagged", False)
                     }
 
@@ -308,7 +309,6 @@ class VideoLipSyncClient:
                     video_url = resp_data.get("url")
                     if video_url:
                         result["video_url"] = video_url
-                        print(f"视频改口型成功！视频URL: {video_url}")
 
                     # 添加视频元数据
                     vid_info = resp_data.get("vid_info", {})
@@ -356,7 +356,9 @@ class VideoLipSyncClient:
                         # 如果返回结果包含video_url，说明任务已完成
                         return result
 
-                print(f"任务进行中... 状态: {result.get('status', 'unknown')}")
+                # 优先使用API返回的中文message，如果没有则使用status
+                message = result.get("message", f"任务状态: {result.get('status', 'unknown')}")
+                print(f"任务进行中... {message}")
                 time.sleep(check_interval)
 
             except Exception as e:
