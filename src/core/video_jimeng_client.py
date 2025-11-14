@@ -433,33 +433,8 @@ class VideoJimengClient:
             status = data["status"]
 
             if status == "done":
-                result = {
-                    "status": status,
-                    "aigc_meta_tagged": data.get("aigc_meta_tagged", False)
-                }
-
-                # 根据操作类型处理结果
-                if operation_type == "generate":
-                    # 视频生成结果
-                    video_url = data.get("video_url")
-                    if video_url:
-                        result["video_url"] = video_url
-                        print(f"视频生成成功！视频URL: {video_url}")
-                elif operation_type in ["detect", "detect_object"]:
-                    # 主体识别/检测结果
-                    resp_data = data.get("resp_data")
-                    if resp_data:
-                        try:
-                            resp_data_dict = json.loads(resp_data) if isinstance(resp_data, str) else resp_data
-                            if operation_type == "detect":
-                                result["contains_subject"] = resp_data_dict.get("status", 0)  # 0:不包含, 1:包含
-                                print(f"主体识别结果: {'包含主体' if result['contains_subject'] == 1 else '不包含主体'}")
-                            elif operation_type == "detect_object":
-                                result["contains_object"] = resp_data_dict.get("status", 0)  # 0:不包含, 1:包含
-                                print(f"对象检测结果: {'包含对象' if result['contains_object'] == 1 else '不包含对象'}")
-                        except json.JSONDecodeError:
-                            print(f"解析检测结果失败: {resp_data}")
-
+                # 直接返回完整的原始API响应
+                result = data.copy()
                 return result
             else:
                 return {"status": status, "message": f"任务状态: {status}"}
@@ -536,16 +511,8 @@ class VideoJimengClient:
         # 等待完成
         result = self.wait_for_completion(task_id, "generate", version, max_wait_time=max_wait_time)
 
-        if result.get("status") == "done":
-            print("🎉 数字人视频生成完成！")
-            return {
-                "video_url": result.get("video_url"),
-                "aigc_meta_tagged": result.get("aigc_meta_tagged"),
-                "task_id": task_id,
-                "version": version
-            }
-        else:
-            raise Exception(f"视频生成失败: {result}")
+        # 直接返回原始API响应，不进行二次封装
+        return result
 
 
 # 示例使用代码

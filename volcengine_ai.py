@@ -174,10 +174,10 @@ class VolcEngineAI:
         return self._jimeng_client.detect_object(image_url)
 
     def jm_create_video(self, image_url: str, audio_url: str, version: str = "1.5", prompt: Optional[str] = None, mask_url: Optional[List[str]] = None, seed: Optional[int] = None, pe_fast_mode: bool = False):
-        """生成数字人视频"""
+        """生成数字人视频（只提交任务，返回task_id）"""
         if not self._jimeng_client:
             raise Exception("即梦AI模块未正确加载")
-        return self._jimeng_client.generate_video_from_image_audio(image_url, audio_url, version, prompt, mask_url, seed, pe_fast_mode)
+        return self._jimeng_client.generate_video(image_url, audio_url, version, prompt, mask_url, seed, pe_fast_mode)
 
     def jm_query_result(self, task_id: str, operation_type: str = "generate", version: str = "1.5"):
         """查询即梦AI任务结果"""
@@ -1000,23 +1000,8 @@ def jm_detect_avatar(args):
 
         result = ai.jm_detect_avatar(args.image_url, args.version)
 
-        if result.get("status") == "done":
-            contains = result.get("contains_subject", 0)
-            print(f"✅ 主体识别完成：{'包含主体' if contains == 1 else '不包含主体'}")
-
-            if contains == 1:
-                print("🎉 图片适合生成数字人视频！")
-                # 显示主体信息
-                if "resp_data" in result:
-                    resp_data = result["resp_data"]
-                    if isinstance(resp_data, dict):
-                        role_id = resp_data.get("role_id")
-                        if role_id:
-                            print(f"🆔 主体ID: {role_id}")
-            else:
-                print("⚠️ 图片中未检测到人、类人、拟人等主体，请更换图片")
-        else:
-            print(f"❌ 主体识别失败: {result}")
+        # 直接显示原始API响应，不进行二次处理
+        print(f"📋 API响应: {result}")
 
     except Exception as e:
         print(f"❌ 主体识别失败: {str(e)}")
@@ -1037,31 +1022,8 @@ def jm_detect_object(args):
 
         result = ai.jm_detect_object(args.image_url)
 
-        if result.get("status") == "done":
-            print("✅ 对象检测完成！")
-
-            # 显示检测到的对象信息
-            if "resp_data" in result:
-                resp_data = result["resp_data"]
-                if isinstance(resp_data, dict):
-                    contains_object = resp_data.get("contains_object", 0)
-                    print(f"📊 检测结果：{'包含对象' if contains_object == 1 else '不包含对象'}")
-
-                    if contains_object == 1:
-                        object_count = resp_data.get("object_count", 0)
-                        print(f"🔢 检测到 {object_count} 个对象")
-
-                        # 显示mask图URL
-                        mask_urls = resp_data.get("mask_urls", [])
-                        if mask_urls:
-                            print(f"🖼️ Mask图片数量: {len(mask_urls)}")
-                            for i, mask_url in enumerate(mask_urls, 1):
-                                print(f"   {i}. {mask_url}")
-                            print("💡 可以使用mask_url参数指定特定对象生成视频")
-                    else:
-                        print("⚠️ 图片中未检测到有效对象，请更换图片")
-        else:
-            print(f"❌ 对象检测失败: {result}")
+        # 直接显示原始API响应，不进行二次处理
+        print(f"📋 API响应: {result}")
 
     except Exception as e:
         print(f"❌ 对象检测失败: {str(e)}")
@@ -1081,7 +1043,7 @@ def jm_create_handler(args):
     jm_create_video(Args())
 
 def jm_create_video(args):
-    """生成数字人视频"""
+    """生成数字人视频（提交任务并自动查询下载）"""
     ai = VolcEngineAI()
     try:
         print(f"🎬 开始生成数字人视频，版本: {args.version}")
@@ -1098,7 +1060,8 @@ def jm_create_video(args):
         if args.pe_fast_mode:
             print("⚡ 快速模式: 开启")
 
-        result = ai.jm_create_video(
+        # 步骤1：提交任务
+        task_id = ai.jm_create_video(
             args.image_url,
             args.audio_url,
             args.version,
@@ -1108,16 +1071,19 @@ def jm_create_video(args):
             args.pe_fast_mode
         )
 
-        if result.get("status") == "done":
-            print("🎉 数字人视频生成完成！")
-            video_url = result.get("video_url")
-            if video_url:
-                print(f"📹 视频URL: {video_url}")
-                print(f"🆔 任务ID: {result.get('task_id')}")
-            else:
-                print("⚠️ 视频生成完成，但未获取到视频URL")
-        else:
-            print(f"❌ 视频生成失败: {result}")
+        print(f"✅ 视频生成任务已提交")
+        print(f"🆔 任务ID: {task_id}")
+        print("⏳ 正在等待处理完成...")
+
+        # 步骤2：自动查询并等待完成（调用现有的query逻辑）
+        class QueryArgs:
+            def __init__(self):
+                self.task_id = task_id
+                self.operation_type = "generate"
+                self.version = args.version
+                self.filename = None  # create命令使用默认文件名
+
+        jm_query_result(QueryArgs())
 
     except Exception as e:
         print(f"❌ 视频生成失败: {str(e)}")
@@ -1129,73 +1095,79 @@ def jm_query_handler(args):
             self.task_id = args.task_id
             self.operation_type = args.operation_type
             self.version = args.version
-            self.download = args.download
             self.filename = args.filename
 
     jm_query_result(Args())
 
 def jm_query_result(args):
-    """查询即梦AI任务结果"""
+    """查询即梦AI任务结果（循环等待直到完成）"""
+    import time
     ai = VolcEngineAI()
+    start_time = time.time()
+    max_wait_time = 600  # 10分钟
+    check_interval = 15  # 15秒检查一次
+
     try:
-        print(f"🔍 查询即梦AI任务ID: {args.task_id}")
-        print(f"📋 操作类型: {args.operation_type}")
+        print(f"🔍 开始查询任务ID: {args.task_id} ({args.operation_type}操作)")
         print(f"🔢 版本: {args.version}")
+        print(f"⏰ 最大等待时间: {max_wait_time}秒，每{check_interval}秒检查一次")
 
-        result = ai.jm_query_result(args.task_id, args.operation_type, args.version)
+        while time.time() - start_time < max_wait_time:
+            try:
+                result = ai.jm_query_result(args.task_id, args.operation_type, args.version)
+                print(f"📋 API响应: {result}")
 
-        if result.get("status") == "done":
-            print("✅ 任务完成！")
+                # 检查任务状态
+                if isinstance(result, dict):
+                    status = result.get("status", "unknown")
+                    if status == "done":
+                        print(f"✅ 任务完成！")
 
-            if args.operation_type == "generate":
-                # 视频生成结果
-                video_url = result.get("video_url")
-                if video_url:
-                    print(f"📹 视频URL: {video_url}")
+                        # 如果是视频生成且有视频URL，自动下载
+                        if args.operation_type == "generate" and result.get("video_url"):
+                            video_url = result["video_url"]
+                            filename = args.filename or f"jm_video_{args.task_id}.mp4"
+                            download_video(video_url, filename)
+                            print("\n🎉 视频生成完成！")
+                            print("=" * 50)
+                            print(f"🆔 任务ID: {args.task_id}")
+                            print(f"📹 视频URL: {video_url}")
+                            print(f"📁 本地文件: {filename}")
+                            print("=" * 50)
+                        return
 
-                    if args.download:
-                        filename = args.filename or f"jimeng_video_{args.task_id}.mp4"
-                        print(f"📥 开始下载视频到: {filename}")
+                    elif status in ["not_found", "expired"]:
+                        print(f"❌ 任务异常: {status}")
+                        return
 
-                        # 这里可以添加下载逻辑，但需要实现下载功能
-                        print("💡 下载功能需要额外实现")
+                    elif args.operation_type == "generate" and result.get("video_url"):
+                        # 如果有video_url说明任务已完成
+                        print(f"✅ 任务完成！")
+                        video_url = result["video_url"]
+                        filename = args.filename or f"jm_video_{args.task_id}.mp4"
+                        download_video(video_url, filename)
+                        print("\n🎉 视频生成完成！")
+                        print("=" * 50)
+                        print(f"🆔 任务ID: {args.task_id}")
+                        print("=" * 50)
+                        return
+
                     else:
-                        print("💡 使用 --download 参数可下载视频")
+                        # 优先使用API返回的中文message，如果没有则使用status
+                        message = result.get("message", f"任务状态: {status}")
+                        print(f"⏳ 任务进行中... {message}")
+
                 else:
-                    print("⚠️ 未获取到视频URL")
+                    print(f"⏳ 任务进行中... 状态: {result}")
 
-            elif args.operation_type == "detect":
-                # 主体识别结果
-                contains = result.get("contains_subject", 0)
-                print(f"👤 主体识别: {'包含主体' if contains == 1 else '不包含主体'}")
+                time.sleep(check_interval)
 
-                if contains == 1 and "resp_data" in result:
-                    resp_data = result["resp_data"]
-                    if isinstance(resp_data, dict) and "role_id" in resp_data:
-                        print(f"🆔 主体ID: {resp_data['role_id']}")
+            except Exception as e:
+                print(f"⚠️ 查询出错: {str(e)}，{check_interval}秒后重试...")
+                time.sleep(check_interval)
 
-            elif args.operation_type == "detect_object":
-                # 对象检测结果
-                contains_object = result.get("contains_object", 0)
-                print(f"🎭 对象检测: {'包含对象' if contains_object == 1 else '不包含对象'}")
-
-                if contains_object == 1 and "resp_data" in result:
-                    resp_data = result["resp_data"]
-                    if isinstance(resp_data, dict):
-                        object_count = resp_data.get("object_count", 0)
-                        print(f"🔢 对象数量: {object_count}")
-
-        elif result.get("status") == "failed":
-            print("❌ 任务失败")
-            if "resp_data" in result:
-                resp_data = result["resp_data"]
-                if isinstance(resp_data, dict):
-                    error_msg = resp_data.get("msg", "未知错误")
-                    print(f"❌ 错误信息: {error_msg}")
-
-        else:
-            print(f"📊 任务状态: {result.get('status', 'unknown')}")
-            print("💡 任务仍在处理中，请稍后再次查询")
+        print(f"⏰ 等待超时 ({max_wait_time}秒)，任务可能仍在处理")
+        print(f"💡 提示: 可手动继续查询: python volcengine_ai.py jm omni query {args.task_id} --version {args.version} --operation-type {args.operation_type}")
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
@@ -1298,7 +1270,7 @@ def main():
     # jm omni detect-avatar - 主体识别
     jm_omni_detect = jm_omni_subparsers.add_parser('detect-avatar', help='即梦数字人 - 主体识别')
     jm_omni_detect.add_argument('image_url', help='图片URL')
-    jm_omni_detect.add_argument('--version', choices=['1.0', '1.5'], default='1.5', help='版本选择 (1.0: 480P基础版, 1.5: 1080P增强版)')
+    jm_omni_detect.add_argument('--version', choices=['1.0', '1.5'], required=True, help='版本选择 (1.0: 480P基础版, 1.5: 1080P增强版)')
     jm_omni_detect.set_defaults(func=jm_detect_avatar_handler)
 
     # jm omni detect-object - 对象检测
@@ -1310,7 +1282,7 @@ def main():
     jm_omni_create = jm_omni_subparsers.add_parser('create', help='即梦数字人 - 生成视频')
     jm_omni_create.add_argument('image_url', help='图片URL')
     jm_omni_create.add_argument('audio_url', help='音频URL')
-    jm_omni_create.add_argument('--version', choices=['1.0', '1.5'], default='1.5', help='版本选择 (1.0: 480P基础版, 1.5: 1080P增强版)')
+    jm_omni_create.add_argument('--version', choices=['1.0', '1.5'], required=True, help='版本选择 (1.0: 480P基础版, 1.5: 1080P增强版)')
     jm_omni_create.add_argument('--prompt', help='提示词（仅1.5版支持）')
     jm_omni_create.add_argument('--mask-url', nargs='+', help='mask图URL列表（仅1.5版，用于指定主体）')
     jm_omni_create.add_argument('--seed', type=int, help='随机种子（仅1.5版）')
@@ -1321,9 +1293,8 @@ def main():
     jm_omni_query = jm_omni_subparsers.add_parser('query', help='即梦数字人 - 查询状态')
     jm_omni_query.add_argument('task_id', help='任务ID')
     jm_omni_query.add_argument('--operation-type', choices=['detect', 'detect_object', 'generate'], default='generate', help='操作类型')
-    jm_omni_query.add_argument('--version', choices=['1.0', '1.5'], default='1.5', help='版本选择')
-    jm_omni_query.add_argument('--download', action='store_true', help='下载结果到本地')
-    jm_omni_query.add_argument('--filename', help='保存文件名')
+    jm_omni_query.add_argument('--version', choices=['1.0', '1.5'], required=True, help='版本选择')
+    jm_omni_query.add_argument('--filename', help='保存文件名（可选，默认为jm_video_<task_id>.mp4）')
     jm_omni_query.set_defaults(func=jm_query_handler)
 
     # === 形象管理 (va) - 添加到va子命令中 ===
