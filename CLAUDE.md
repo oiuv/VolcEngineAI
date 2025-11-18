@@ -16,7 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `video_translation_client.py` - 视频翻译（待开发）
 - `video_lip_sync_client.py` - 视频改口型
 - `video_video_driven_client.py` - 单图视频驱动（待开发）
-- `video_jimeng_client.py` - 即梦AI数字人生成
+- `jimeng_omni_client.py` - 即梦AI OmniHuman数字人生成
+- `jimeng_mimic_client.py` - 即梦AI动作模仿
 - `video_product_client.py` - 商品互动（待开发）
 
 #### 图像类 (image_)
@@ -40,7 +41,8 @@ VolcEngineAI/
 │   │   ├── video_audio_driven_client.py
 │   │   ├── video_lip_sync_client.py
 │   │   ├── video_effect_client.py
-│   │   └── video_jimeng_client.py
+│   │   ├── jimeng_omni_client.py
+│   │   └── jimeng_mimic_client.py
 │   └── modules/                  # 功能模块
 │       └── avatar_manager.py     # 形象管理
 ├── data/                         # 数据目录

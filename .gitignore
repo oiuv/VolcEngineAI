@@ -44,6 +44,9 @@ data/avatars.json
 *.avi
 *.mov
 *.mkv
+*.flv
+*.wmv
+*.webm
 
 # Logs
 *.log
@@ -52,6 +55,3 @@ data/avatars.json
 .env
 .env.local
 
-# Downloaded videos
-video_*.mp4
-effect_video_*.mp4

@@ -42,10 +42,16 @@ class VolcEngineAI:
             self._lip_sync_client = None
 
         try:
-            from src.core.video_jimeng_client import VideoJimengClient
+            from src.core.jimeng_omni_client import VideoJimengClient
             self._jimeng_client = VideoJimengClient(self.access_key, self.secret_key)
         except ImportError:
             self._jimeng_client = None
+
+        try:
+            from src.core.jimeng_mimic_client import VideoJimengMimicClient
+            self._jimeng_mimic_client = VideoJimengMimicClient(self.access_key, self.secret_key)
+        except ImportError:
+            self._jimeng_mimic_client = None
 
         try:
             from src.core.video_effect_client import VideoEffectClient
@@ -184,6 +190,18 @@ class VolcEngineAI:
         if not self._jimeng_client:
             raise Exception("即梦AI模块未正确加载")
         return self._jimeng_client.get_result(task_id, operation_type, version)
+
+    def jm_mimic_submit_task(self, image_url: str, video_url: str) -> str:
+        """提交动作模仿任务"""
+        if not self._jimeng_mimic_client:
+            raise Exception("即梦AI动作模仿模块未正确加载")
+        return self._jimeng_mimic_client.submit_mimic_task(image_url, video_url)
+
+    def jm_mimic_get_result(self, task_id: str) -> Dict[str, Any]:
+        """获取动作模仿任务结果"""
+        if not self._jimeng_mimic_client:
+            raise Exception("即梦AI动作模仿模块未正确加载")
+        return self._jimeng_mimic_client.get_mimic_result(task_id)
 
 
 def create_avatar(args):
@@ -1172,6 +1190,120 @@ def jm_query_result(args):
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
 
+# 即梦AI动作模仿 (jm mimic) 处理器
+def jm_mimic_create_handler(args):
+    """创建动作模仿任务（提交任务并自动查询下载）"""
+    class Args:
+        def __init__(self):
+            self.image_url = args.image_url
+            self.video_url = args.video_url
+            self.filename = args.filename
+
+    jm_mimic_create(Args())
+
+def jm_mimic_create(args):
+    """创建动作模仿任务（提交任务并自动查询下载）"""
+    ai = VolcEngineAI()
+    try:
+        # 步骤1：提交任务
+        task_id = ai.jm_mimic_submit_task(args.image_url, args.video_url)
+
+        print(f"✅ 动作模仿任务已提交")
+        print(f"🆔 任务ID: {task_id}")
+        print("⏳ 正在等待处理完成...")
+
+        # 步骤2：自动查询并等待完成（调用现有的query逻辑）
+        class QueryArgs:
+            def __init__(self):
+                self.task_id = task_id
+                self.filename = args.filename
+
+        jm_mimic_query(QueryArgs())
+
+    except Exception as e:
+        print(f"❌ 动作模仿任务创建失败: {str(e)}")
+
+def jm_mimic_query_handler(args):
+    """查询动作模仿任务状态"""
+    class Args:
+        def __init__(self):
+            self.task_id = args.task_id
+            self.filename = args.filename
+
+    jm_mimic_query(Args())
+
+def jm_mimic_query(args):
+    """查询动作模仿任务结果（循环等待直到完成）"""
+    import time
+    ai = VolcEngineAI()
+    start_time = time.time()
+    max_wait_time = 600  # 10分钟
+    check_interval = 15  # 15秒检查一次
+
+    try:
+        print(f"🔍 开始查询动作模仿任务ID: {args.task_id}")
+        print(f"⏰ 最大等待时间: {max_wait_time}秒，每{check_interval}秒检查一次")
+
+        while time.time() - start_time < max_wait_time:
+            try:
+                result = ai.jm_mimic_get_result(args.task_id)
+                print(f"📋 API响应: {result}")
+
+                # 检查任务状态
+                if isinstance(result, dict):
+                    status = result.get("status", "unknown")
+                    if status == "done":
+                        print(f"✅ 任务完成！")
+
+                        # 如果有视频URL，自动下载
+                        if result.get("video_url"):
+                            video_url = result["video_url"]
+                            filename = args.filename or f"jm_mimic_{args.task_id}.mp4"
+                            download_video(video_url, filename)
+                            print("\n🎉 动作模仿视频生成完成！")
+                            print("=" * 50)
+                            print(f"🆔 任务ID: {args.task_id}")
+                            print(f"📹 视频URL: {video_url}")
+                            print(f"📁 本地文件: {filename}")
+                            print("=" * 50)
+                        return
+
+                    elif status in ["not_found", "expired"]:
+                        print(f"❌ 任务异常: {status}")
+                        return
+
+                    elif result.get("video_url"):
+                        # 如果有video_url说明任务已完成
+                        print(f"✅ 任务完成！")
+                        video_url = result["video_url"]
+                        filename = args.filename or f"jm_mimic_{args.task_id}.mp4"
+                        download_video(video_url, filename)
+                        print("\n🎉 动作模仿视频生成完成！")
+                        print("=" * 50)
+                        print(f"🆔 任务ID: {args.task_id}")
+                        print("=" * 50)
+                        return
+
+                    else:
+                        # 优先使用API返回的中文message，如果没有则使用status
+                        message = result.get("message", f"任务状态: {status}")
+                        print(f"⏳ 任务进行中... {message}")
+
+                else:
+                    print(f"⏳ 任务进行中... 状态: {result}")
+
+                time.sleep(check_interval)
+
+            except Exception as e:
+                print(f"⚠️ 查询出错: {str(e)}，{check_interval}秒后重试...")
+                time.sleep(check_interval)
+
+        print(f"⏰ 等待超时 ({max_wait_time}秒)，任务可能仍在处理")
+        print(f"💡 提示: 可手动继续查询: python volcengine_ai.py jm mimic query {args.task_id}")
+
+    except Exception as e:
+        print(f"❌ 查询失败: {str(e)}")
+
 
 def main():
     """统一入口主函数"""
@@ -1261,7 +1393,7 @@ def main():
 
     # === 即梦AI数字人 (jm) ===
     jm_parser = subparsers.add_parser('jm', help='即梦AI多功能生成平台')
-    jm_subparsers = jm_parser.add_subparsers(dest='jm_action', help='即梦AI数字人操作')
+    jm_subparsers = jm_parser.add_subparsers(dest='jm_action', help='即梦AI视频生成操作')
 
     # jm omni - OmniHuman数字人视频
     jm_omni_parser = jm_subparsers.add_parser('omni', help='即梦OmniHuman数字人视频')
@@ -1296,6 +1428,23 @@ def main():
     jm_omni_query.add_argument('--version', choices=['1.0', '1.5'], required=True, help='版本选择')
     jm_omni_query.add_argument('--filename', help='保存文件名（可选，默认为jm_video_<task_id>.mp4）')
     jm_omni_query.set_defaults(func=jm_query_handler)
+
+    # jm mimic - 动作模仿
+    jm_mimic_parser = jm_subparsers.add_parser('mimic', help='即梦动作模仿')
+    jm_mimic_subparsers = jm_mimic_parser.add_subparsers(dest='jm_mimic_action', help='即梦动作模仿操作')
+
+    # jm mimic create - 创建动作模仿任务
+    jm_mimic_create = jm_mimic_subparsers.add_parser('create', help='创建动作模仿任务')
+    jm_mimic_create.add_argument('image_url', help='图片URL（需公网可访问）')
+    jm_mimic_create.add_argument('video_url', help='视频URL（需公网可访问）')
+    jm_mimic_create.add_argument('--filename', help='保存文件名（可选，默认为jm_mimic_<task_id>.mp4）')
+    jm_mimic_create.set_defaults(func=jm_mimic_create_handler)
+
+    # jm mimic query - 查询动作模仿任务
+    jm_mimic_query = jm_mimic_subparsers.add_parser('query', help='查询动作模仿任务状态')
+    jm_mimic_query.add_argument('task_id', help='任务ID')
+    jm_mimic_query.add_argument('--filename', help='保存文件名（可选，默认为jm_mimic_<task_id>.mp4）')
+    jm_mimic_query.set_defaults(func=jm_mimic_query_handler)
 
     # === 形象管理 (va) - 添加到va子命令中 ===
     va_avatars = va_subparsers.add_parser('avatars', help='查看可用形象')
@@ -1340,6 +1489,11 @@ def main():
         elif args.jm_action == 'omni':
             if not args.jm_omni_action:
                 jm_omni_parser.print_help()
+                return
+            args.func(args)
+        elif args.jm_action == 'mimic':
+            if not args.jm_mimic_action:
+                jm_mimic_parser.print_help()
                 return
             args.func(args)
         else:
