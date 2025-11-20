@@ -1329,9 +1329,9 @@ def main():
     parser = argparse.ArgumentParser(description="火山引擎AI平台")
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 
-    # === 音频驱动 (va) ===
-    va_parser = subparsers.add_parser('va', help='音频驱动视频生成')
-    va_subparsers = va_parser.add_subparsers(dest='va_action', help='音频驱动操作')
+    # === 单图音频驱动 (va) ===
+    va_parser = subparsers.add_parser('va', help='单图音频驱动视频生成')
+    va_subparsers = va_parser.add_subparsers(dest='va_action', help='单图音频驱动操作')
 
     # va create-avatar
     va_create_avatar = va_subparsers.add_parser('create-avatar', help='创建数字形象')
@@ -1367,8 +1367,8 @@ def main():
     va_create.set_defaults(func=va_create_handler)
 
     # === 特效视频 (ve) ===
-    ve_parser = subparsers.add_parser('ve', help='创意特效视频生成')
-    ve_subparsers = ve_parser.add_subparsers(dest='ve_action', help='特效视频操作')
+    ve_parser = subparsers.add_parser('ve', help='单图创意特效视频生成')
+    ve_subparsers = ve_parser.add_subparsers(dest='ve_action', help='单图创意特效视频操作')
 
     # ve create
     ve_create = ve_subparsers.add_parser('create', help='生成创意特效视频')
@@ -1388,8 +1388,8 @@ def main():
     ve_templates.set_defaults(func=ve_templates_handler)
 
     # === 视频改口型 (vl) ===
-    vl_parser = subparsers.add_parser('vl', help='视频改口型生成')
-    vl_subparsers = vl_parser.add_subparsers(dest='vl_action', help='视频改口型操作')
+    vl_parser = subparsers.add_parser('vl', help='音频驱动单人口播视频改口型')
+    vl_subparsers = vl_parser.add_subparsers(dest='vl_action', help='音频驱动视频改口型操作')
 
     # vl create
     vl_create = vl_subparsers.add_parser('create', help='生成视频改口型')
@@ -1409,6 +1409,23 @@ def main():
     vl_query.add_argument('--mode', choices=['lite', 'basic'], required=True, help='生成时使用的模式')
     vl_query.add_argument('--filename', help='保存文件名（可选，默认为lip_sync_video_<task_id>.mp4）')
     vl_query.set_defaults(func=vl_query_handler)
+
+    # === 单图视频驱动 (vv) ===
+    vv_parser = subparsers.add_parser('vv', help='单图视频驱动视频生成')
+    vv_subparsers = vv_parser.add_subparsers(dest='vv_action', help='单图视频驱动操作')
+
+    # vv create - 创建单图视频驱动任务
+    vv_create = vv_subparsers.add_parser('create', help='创建单图视频驱动任务')
+    vv_create.add_argument('image_url', help='图片URL（需公网可访问）')
+    vv_create.add_argument('video_url', help='驱动视频URL（需公网可访问）')
+    vv_create.add_argument('--filename', help='保存文件名（可选，默认为video_driven_<task_id>.mp4）')
+    vv_create.set_defaults(func=vv_create_handler)
+
+    # vv query - 查询单图视频驱动任务
+    vv_query = vv_subparsers.add_parser('query', help='查询单图视频驱动任务状态')
+    vv_query.add_argument('task_id', help='任务ID')
+    vv_query.add_argument('--filename', help='保存文件名（可选，默认为video_driven_<task_id>.mp4）')
+    vv_query.set_defaults(func=vv_query_handler)
 
     # === 即梦AI数字人 (jm) ===
     jm_parser = subparsers.add_parser('jm', help='即梦AI多功能生成平台')
@@ -1465,23 +1482,6 @@ def main():
     jm_mimic_query.add_argument('--filename', help='保存文件名（可选，默认为jm_mimic_<task_id>.mp4）')
     jm_mimic_query.set_defaults(func=jm_mimic_query_handler)
 
-    # === 单图视频驱动 (vv) ===
-    vv_parser = subparsers.add_parser('vv', help='单图视频驱动生成')
-    vv_subparsers = vv_parser.add_subparsers(dest='vv_action', help='单图视频驱动操作')
-
-    # vv create - 创建单图视频驱动任务
-    vv_create = vv_subparsers.add_parser('create', help='创建单图视频驱动任务')
-    vv_create.add_argument('image_url', help='图片URL（需公网可访问）')
-    vv_create.add_argument('video_url', help='驱动视频URL（需公网可访问）')
-    vv_create.add_argument('--filename', help='保存文件名（可选，默认为video_driven_<task_id>.mp4）')
-    vv_create.set_defaults(func=vv_create_handler)
-
-    # vv query - 查询单图视频驱动任务
-    vv_query = vv_subparsers.add_parser('query', help='查询单图视频驱动任务状态')
-    vv_query.add_argument('task_id', help='任务ID')
-    vv_query.add_argument('--filename', help='保存文件名（可选，默认为video_driven_<task_id>.mp4）')
-    vv_query.set_defaults(func=vv_query_handler)
-
     # === 形象管理 (va) - 添加到va子命令中 ===
     va_avatars = va_subparsers.add_parser('avatars', help='查看可用形象')
     va_avatars.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='按模式筛选')
@@ -1518,6 +1518,11 @@ def main():
             vl_parser.print_help()
             return
         args.func(args)
+    elif args.command == 'vv':
+        if not args.vv_action:
+            vv_parser.print_help()
+            return
+        args.func(args)
     elif args.command == 'jm':
         if not args.jm_action:
             jm_parser.print_help()
@@ -1534,11 +1539,6 @@ def main():
             args.func(args)
         else:
             jm_parser.print_help()
-    elif args.command == 'vv':
-        if not args.vv_action:
-            vv_parser.print_help()
-            return
-        args.func(args)
 
 
 def vv_create_handler(args):
