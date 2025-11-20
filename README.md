@@ -1,6 +1,6 @@
 # 火山引擎AI视频生成客户端
 
-基于火山引擎API的AI视频生成客户端，支持单图音频驱动视频生成、视频改口型和创意特效视频生成。
+基于火山引擎API的AI视频生成客户端，支持单图音频驱动视频生成、视频改口型、创意特效视频生成、即梦AI数字人生成、即梦AI动作模仿和单图视频驱动。
 
 ## 产品介绍
 
@@ -12,6 +12,15 @@
 
 ### 3. 创意特效视频生成
 基于单张图片或双张图片，使用AI技术生成各种创意特效视频，支持49种不同的特效模板，涵盖卡通变身、情感互动、变装换装等多种风格。
+
+### 4. 即梦AI数字人生成 (OmniHuman)
+基于单张图片和音频，生成高质量的数字人视频。支持OmniHuman 1.0和1.5两个版本，具备主体识别、对象检测、提示词控制等高级功能。
+
+### 5. 即梦AI动作模仿
+输入单张图片和模板视频，生成模仿视频动作的视频。支持真人、动漫、宠物的动作和表情模仿。
+
+### 6. 单图视频驱动
+输入单张图片和驱动视频，生成以图片场景和人物模仿视频动作的视频。支持人脸表情和肢体动作驱动，输出高分辨率视频。
 
 ## 驱动模式说明
 
@@ -29,6 +38,16 @@
 |------|----------|--------------|----------|----------|
 | **Lite模式**<br>(lite) | 单人正面视频 | 240秒 | 360p-1080p，mp4/mov格式 | 视频循环、倒放循环、开始时间设置 |
 | **Basic模式**<br>(basic) | 单人复杂场景 | 150秒 | 360p-1080p，mp4/mov格式 | 人声分离、场景切分、说话人识别 |
+
+### 单图视频驱动规格
+
+| 项目 | 要求说明 |
+|------|----------|
+| **输入图片** | 格式：jpeg/jpg/png<br>分辨率：512x512 - 4096x4096<br>需公网可访问 |
+| **驱动视频** | 格式：mp4/mov/webm<br>分辨率：540-2048<br>时长：最大30秒<br>需公网可访问 |
+| **输出视频** | 分辨率：960x540 或 896x672<br>格式：mp4<br>驱动范围：全脸+肢体动作 |
+| **收费标准** | 0.3元/秒，并发限制1 |
+| **支持场景** | 真人、正面场景、无遮挡、无快速运动 |
 
 ## 场景对比
 
@@ -254,6 +273,59 @@ python volcengine_ai.py ve query "任务ID" --download
 
 # 指定文件名下载
 python volcengine_ai.py ve query "任务ID" --download --filename "我的特效视频.mp4"
+```
+
+## 即梦AI数字人生成
+
+### OmniHuman 1.0版一键生成（快速模式）
+```bash
+python volcengine_ai.py jm va create-avatar "图片URL" "音频URL" "一个微笑的年轻女性" --mode 1.0
+```
+
+### OmniHuman 1.5版带对象检测（高质量模式）
+```bash
+python volcengine_ai.py jm va create-avatar "图片URL" "音频URL" "一个穿着蓝色衬衫的男性" --mode 1.5 --subject-id 1 --enable-object-detection
+```
+
+### 即梦AI分步操作
+```bash
+# 主体检测
+python volcengine_ai.py jm va detect "图片URL" "一个可爱的宠物" --mode 1.5
+
+# 对象检测（1.5版专用）
+python volcengine_ai.py jm va detect-object 1 12345678 --mode 1.5
+
+# 查询结果
+python volcengine_ai.py jm va query 87654321 --mode 1.5
+```
+
+## 即梦AI动作模仿
+
+### 创建动作模仿任务
+```bash
+python volcengine_ai.py jm mimic create "图片URL" "视频URL"
+```
+
+### 查询动作模仿状态
+```bash
+python volcengine_ai.py jm mimic query "任务ID"
+```
+
+## 单图视频驱动
+
+### 创建单图视频驱动任务
+```bash
+python volcengine_ai.py vv create "图片URL" "驱动视频URL"
+```
+
+### 查询单图视频驱动状态
+```bash
+python volcengine_ai.py vv query "任务ID"
+```
+
+### 下载并指定文件名
+```bash
+python volcengine_ai.py vv query "任务ID" --filename "我的驱动视频.mp4"
 ```
 
 ## 特效视频模板分类

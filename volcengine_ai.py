@@ -59,6 +59,12 @@ class VolcEngineAI:
         except ImportError:
             self._effect_client = None
 
+        try:
+            from src.core.video_video_driven_client import VideoVideoDrivenClient
+            self._video_driven_client = VideoVideoDrivenClient(self.access_key, self.secret_key)
+        except ImportError:
+            self._video_driven_client = None
+
     # 单图音频驱动功能
     def create_avatar(self, image_url: str, mode: str = "normal") -> str:
         """创建数字形象"""
@@ -202,6 +208,19 @@ class VolcEngineAI:
         if not self._jimeng_mimic_client:
             raise Exception("即梦AI动作模仿模块未正确加载")
         return self._jimeng_mimic_client.get_mimic_result(task_id)
+
+    # 单图视频驱动功能
+    def submit_video_driven_task(self, image_url: str, video_url: str, aigc_meta: Optional[Dict] = None) -> str:
+        """提交单图视频驱动任务"""
+        if not self._video_driven_client:
+            raise Exception("单图视频驱动模块未正确加载")
+        return self._video_driven_client.submit_driven_task(image_url, video_url, aigc_meta)
+
+    def get_video_driven_result(self, task_id: str, aigc_meta: Optional[Dict] = None) -> Dict[str, Any]:
+        """获取单图视频驱动任务结果"""
+        if not self._video_driven_client:
+            raise Exception("单图视频驱动模块未正确加载")
+        return self._video_driven_client.get_driven_result(task_id, aigc_meta)
 
 
 def create_avatar(args):
@@ -1446,6 +1465,23 @@ def main():
     jm_mimic_query.add_argument('--filename', help='保存文件名（可选，默认为jm_mimic_<task_id>.mp4）')
     jm_mimic_query.set_defaults(func=jm_mimic_query_handler)
 
+    # === 单图视频驱动 (vv) ===
+    vv_parser = subparsers.add_parser('vv', help='单图视频驱动生成')
+    vv_subparsers = vv_parser.add_subparsers(dest='vv_action', help='单图视频驱动操作')
+
+    # vv create - 创建单图视频驱动任务
+    vv_create = vv_subparsers.add_parser('create', help='创建单图视频驱动任务')
+    vv_create.add_argument('image_url', help='图片URL（需公网可访问）')
+    vv_create.add_argument('video_url', help='驱动视频URL（需公网可访问）')
+    vv_create.add_argument('--filename', help='保存文件名（可选，默认为video_driven_<task_id>.mp4）')
+    vv_create.set_defaults(func=vv_create_handler)
+
+    # vv query - 查询单图视频驱动任务
+    vv_query = vv_subparsers.add_parser('query', help='查询单图视频驱动任务状态')
+    vv_query.add_argument('task_id', help='任务ID')
+    vv_query.add_argument('--filename', help='保存文件名（可选，默认为video_driven_<task_id>.mp4）')
+    vv_query.set_defaults(func=vv_query_handler)
+
     # === 形象管理 (va) - 添加到va子命令中 ===
     va_avatars = va_subparsers.add_parser('avatars', help='查看可用形象')
     va_avatars.add_argument('--mode', choices=['normal', 'loopy', 'loopyb'], help='按模式筛选')
@@ -1498,6 +1534,108 @@ def main():
             args.func(args)
         else:
             jm_parser.print_help()
+    elif args.command == 'vv':
+        if not args.vv_action:
+            vv_parser.print_help()
+            return
+        args.func(args)
+
+
+def vv_create_handler(args):
+    """处理单图视频驱动创建命令"""
+    vv_create(args)
+
+
+def vv_query_handler(args):
+    """处理单图视频驱动查询命令"""
+    vv_query(args)
+
+
+def vv_create(args):
+    """创建单图视频驱动任务（自动查询并等待完成）"""
+    ai = VolcEngineAI()
+    try:
+        print(f"🎬 开始创建单图视频驱动任务")
+        print(f"📷 图片URL: {args.image_url}")
+        print(f"🎥 驱动视频URL: {args.video_url}")
+
+        task_id = ai.submit_video_driven_task(args.image_url, args.video_url)
+        print(f"✅ 单图视频驱动任务已提交")
+        print(f"🆔 任务ID: {task_id}")
+        print("⏳ 正在等待处理完成...")
+        print("💡 可以使用以下命令查询状态:")
+        print(f"   python volcengine_ai.py vv query {task_id}")
+
+        # 创建一个临时的args对象来传递给vv_query
+        class QueryArgs:
+            def __init__(self):
+                self.task_id = task_id
+                self.filename = getattr(args, 'filename', None)
+
+        vv_query(QueryArgs())
+
+    except Exception as e:
+        print(f"❌ 创建失败: {str(e)}")
+
+
+def vv_query(args):
+    """查询单图视频驱动任务状态（循环等待直到完成）"""
+    import time
+    ai = VolcEngineAI()
+    start_time = time.time()
+    max_wait_time = 600  # 10分钟
+    check_interval = 15  # 15秒检查一次
+
+    try:
+        print(f"🔍 开始查询单图视频驱动任务ID: {args.task_id}")
+        print(f"⏰ 最大等待时间: {max_wait_time}秒，每{check_interval}秒检查一次")
+
+        while time.time() - start_time < max_wait_time:
+            try:
+                result = ai.get_video_driven_result(args.task_id)
+                print(f"📋 API响应: {result}")
+
+                # 检查任务状态
+                if isinstance(result, dict):
+                    status = result.get("status", "unknown")
+                    if status == "done":
+                        print(f"✅ 任务完成！")
+
+                        # 下载视频
+                        if result.get("video_url"):
+                            video_url = result["video_url"]
+                            filename = args.filename or f"video_driven_{args.task_id}.mp4"
+                            download_video(video_url, filename)
+                            print("\n🎉 单图视频驱动视频生成完成！")
+                            print("=" * 50)
+                            print(f"🆔 任务ID: {args.task_id}")
+                            print(f"📹 视频URL: {video_url}")
+                            print(f"🏷️ 隐式标识: {'已添加' if result.get('aigc_meta_tagged') else '未添加'}")
+                            print("=" * 50)
+                        return
+                    elif status in ["not_found", "expired"]:
+                        print(f"❌ 任务异常: {status}")
+                        return
+
+                    else:
+                        # 优先使用API返回的中文message，如果没有则使用status
+                        message = result.get("message", f"任务状态: {status}")
+                        print(f"⏳ 任务进行中... {message}")
+
+                else:
+                    print(f"⏳ 任务进行中... 状态: {result}")
+
+                time.sleep(check_interval)
+
+            except Exception as e:
+                print(f"⚠️ 查询出错: {str(e)}，{check_interval}秒后重试...")
+                time.sleep(check_interval)
+
+        print(f"⏰ 等待超时 ({max_wait_time}秒)，任务可能仍在处理")
+        print(f"💡 提示: 可手动继续查询: python volcengine_ai.py vv query {args.task_id}")
+
+    except Exception as e:
+        print(f"❌ 查询失败: {str(e)}")
 
 
 if __name__ == "__main__":

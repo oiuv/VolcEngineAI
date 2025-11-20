@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 项目概述
-火山引擎AI视频生成客户端，支持多种AI功能：单图音频驱动视频生成、创意特效视频生成、视频改口型、即梦AI等。
+火山引擎AI视频生成客户端，支持多种AI功能：单图音频驱动视频生成、创意特效视频生成、视频改口型、即梦AI、单图视频驱动等。
 
 ## 核心架构
 
@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `video_effect_client.py` - 创意特效视频生成
 - `video_translation_client.py` - 视频翻译（待开发）
 - `video_lip_sync_client.py` - 视频改口型
-- `video_video_driven_client.py` - 单图视频驱动（待开发）
+- `video_video_driven_client.py` - 单图视频驱动
 - `jimeng_omni_client.py` - 即梦AI OmniHuman数字人生成
 - `jimeng_mimic_client.py` - 即梦AI动作模仿
 - `video_product_client.py` - 商品互动（待开发）
@@ -41,6 +41,7 @@ VolcEngineAI/
 │   │   ├── video_audio_driven_client.py
 │   │   ├── video_lip_sync_client.py
 │   │   ├── video_effect_client.py
+│   │   ├── video_video_driven_client.py
 │   │   ├── jimeng_omni_client.py
 │   │   └── jimeng_mimic_client.py
 │   └── modules/                  # 功能模块
@@ -110,7 +111,32 @@ VolcEngineAI/
   - `ve query <task-id> [--download]`
   - `ve templates`  # 查看可用模板
 
-### 5. 形象管理系统 (avatar_manager)
+### 5. 即梦AI动作模仿 (VideoJimengMimicClient)
+- **服务标识**: jimeng_dream_actor_m1_gen_video_cv
+- **功能特点**:
+  - 输入图片+模板视频，生成动作模仿视频
+  - 支持真人、动漫、宠物的动作和表情模仿
+  - 使用CVSync2AsyncSubmitTask/GetResult异步接口
+- **命令结构**:
+  - `jm mimic create <image-url> <video-url>`  # 创建动作模仿任务
+  - `jm mimic query <task-id>`  # 查询任务状态
+
+### 6. 单图视频驱动 (VideoVideoDrivenClient)
+- **服务标识**: realman_avatar_imitator_v2v_gen_video
+- **功能特点**:
+  - 输入图片+驱动视频，生成模仿视频动作的视频
+  - 支持人脸表情和肢体动作驱动
+  - 输出分辨率：960x540或896x672
+  - 驱动视频限制：最大30秒，支持mp4/mov/webm格式
+- **配置信息**:
+  - 图片格式：jpeg/jpg/png，分辨率512x512以上，最大4096x4096
+  - 视频格式：mp4/mov/webm，分辨率540-2048，最大30秒
+  - 收费标准：0.3元/秒，并发限制1
+- **命令结构**:
+  - `vv create <image-url> <video-url>`  # 创建单图视频驱动任务
+  - `vv query <task-id>`  # 查询任务状态
+
+### 7. 形象管理系统 (avatar_manager)
 - 本地JSON存储形象信息
 - 支持按模式筛选和管理
 - 自动保存创建成功的形象
@@ -201,6 +227,18 @@ python volcengine_ai.py jm va detect-object 1 12345678 --mode 1.5
 
 # 即梦AI分步操作 - 查询结果
 python volcengine_ai.py jm va query 87654321 --mode 1.5
+
+# 即梦AI动作模仿
+python volcengine_ai.py jm mimic create https://image.jpg https://video.mp4
+
+# 查询即梦AI动作模仿状态
+python volcengine_ai.py jm mimic query 123456789
+
+# 单图视频驱动
+python volcengine_ai.py vv create https://image.jpg https://driving_video.mp4
+
+# 查询单图视频驱动状态
+python volcengine_ai.py vv query 987654321
 ```
 
 ## 开发规范
@@ -314,7 +352,6 @@ from src.core.video_effect_client import VideoEffectClient
 
 ### 视频类功能
 - 视频翻译 (video_translation_client.py)
-- 单图视频驱动 (video_video_driven_client.py)
 - 商品互动 (video_product_client.py)
 
 ### 图像类功能
@@ -346,6 +383,7 @@ from src.core.video_effect_client import VideoEffectClient
 - v1.5: 新增视频改口型功能（vl命令）
 - v1.6: 新增即梦AI功能（jm命令）
 - v2.0: 模块化架构统一，所有异步功能采用create+query组合模式
+- v2.1: 新增单图视频驱动功能(vv命令)和即梦AI动作模仿功能
 
 ---
-*最后更新: 2025-11-14*
+*最后更新: 2025-11-20*
