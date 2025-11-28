@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 项目概述
-火山引擎AI视频生成客户端，支持多种AI功能：单图音频驱动视频生成、创意特效视频生成、视频改口型、即梦AI、单图视频驱动等。
+火山引擎AI视频生成客户端，支持多种AI功能：单图音频驱动视频生成、创意特效视频生成、视频改口型、即梦AI、单图视频驱动、图片换装等。
 
 ## 核心架构
 
@@ -24,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `image_generation_client.py` - 文生图、图生图（待开发）
 - `image_effect_client.py` - 图像特效（待开发）
 - `image_cartoon_client.py` - 智能绘图漫画版（待开发）
-- `image_outfit_client.py` - 图片换装（待开发）
+- `image_outfit_client.py` - 图片换装
 
 #### 音频类 (audio_)
 - `audio_clone_client.py` - 声音克隆（待开发）
@@ -43,7 +43,8 @@ VolcEngineAI/
 │   │   ├── video_effect_client.py
 │   │   ├── video_video_driven_client.py
 │   │   ├── jimeng_omni_client.py
-│   │   └── jimeng_mimic_client.py
+│   │   ├── jimeng_mimic_client.py
+│   │   └── image_outfit_client.py
 │   └── modules/                  # 功能模块
 │       └── avatar_manager.py     # 形象管理
 ├── data/                         # 数据目录
@@ -136,7 +137,20 @@ VolcEngineAI/
   - `vv create <image-url> <video-url>`  # 创建单图视频驱动任务
   - `vv query <task-id>`  # 查询任务状态
 
-### 7. 形象管理系统 (avatar_manager)
+### 7. 图片换装 (ImageOutfitClient)
+- **服务标识**: dressing_diffusion
+- **功能特点**:
+  - 输入模特图 + 服装图，输出模特穿着指定服装的图片
+  - 支持复杂的模特pose和任意品类/款式的服装图输入
+  - 支持非服饰和低质量的服饰输入，能合成真实的褶皱和光影
+  - V1版同步接口，一次返回结果
+- **配置信息**:
+  - 图片格式：JPG/JPEG/PNG/JFIF，小于5MB，小于4096*4096
+  - 收费标准：1元/次，并发限制1
+- **命令结构**:
+  - `io generate <model_url> <garment_url>`  # 生成换装图片
+
+### 8. 形象管理系统 (avatar_manager)
 - 本地JSON存储形象信息
 - 支持按模式筛选和管理
 - 自动保存创建成功的形象
@@ -239,6 +253,12 @@ python volcengine_ai.py vv create https://image.jpg https://driving_video.mp4
 
 # 查询单图视频驱动状态
 python volcengine_ai.py vv query 987654321
+
+# 图片换装
+python volcengine_ai.py io generate https://model.jpg https://garment.jpg
+
+# 图片换装（指定保存文件名）
+python volcengine_ai.py io generate https://model.jpg https://garment.jpg --filename my_outfit.png
 ```
 
 ## 开发规范
@@ -358,7 +378,7 @@ from src.core.video_effect_client import VideoEffectClient
 - 文生图、图生图 (image_generation_client.py)
 - 图像特效 (image_effect_client.py)
 - 智能绘图漫画版 (image_cartoon_client.py)
-- 图片换装 (image_outfit_client.py)
+- 图片换装V2版 (image_outfit_client.py V2版)
 
 ### 音频类功能
 - 声音克隆 (audio_clone_client.py)
@@ -384,6 +404,7 @@ from src.core.video_effect_client import VideoEffectClient
 - v1.6: 新增即梦AI功能（jm命令）
 - v2.0: 模块化架构统一，所有异步功能采用create+query组合模式
 - v2.1: 新增单图视频驱动功能(vv命令)和即梦AI动作模仿功能
+- v2.2: 新增图片换装功能(io命令)V1版
 
 ---
 *最后更新: 2025-11-20*

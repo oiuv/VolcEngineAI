@@ -5,6 +5,7 @@
 
 import os
 import sys
+import time
 import argparse
 import requests
 from typing import Dict, Any, Optional, List
@@ -64,6 +65,12 @@ class VolcEngineAI:
             self._video_driven_client = VideoVideoDrivenClient(self.access_key, self.secret_key)
         except ImportError:
             self._video_driven_client = None
+
+        try:
+            from src.core.image_outfit_client import ImageOutfitClient
+            self._image_outfit_client = ImageOutfitClient(self.access_key, self.secret_key)
+        except ImportError:
+            self._image_outfit_client = None
 
     # 单图音频驱动功能
     def create_avatar(self, image_url: str, mode: str = "normal") -> str:
@@ -221,6 +228,48 @@ class VolcEngineAI:
         if not self._video_driven_client:
             raise Exception("单图视频驱动模块未正确加载")
         return self._video_driven_client.get_driven_result(task_id, aigc_meta)
+
+    # 图片换装功能
+    def submit_outfit_task(self, model_url: str, garment_url: str, return_url: bool = True,
+                          model_id: str = "1", garment_id: str = "1",
+                          inference_config: Optional[Dict] = None,
+                          logo_info: Optional[Dict] = None,
+                          aigc_meta: Optional[Dict] = None) -> Dict[str, Any]:
+        """提交图片换装任务"""
+        if not self._image_outfit_client:
+            raise Exception("图片换装模块未正确加载")
+        return self._image_outfit_client.submit_outfit_task(
+            model_url=model_url,
+            garment_url=garment_url,
+            return_url=return_url,
+            model_id=model_id,
+            garment_id=garment_id,
+            inference_config=inference_config,
+            logo_info=logo_info,
+            aigc_meta=aigc_meta
+        )
+
+    def generate_outfit_image(self, model_url: str, garment_url: str, return_url: bool = True,
+                              model_id: str = "1", garment_id: str = "1",
+                              inference_config: Optional[Dict] = None,
+                              logo_info: Optional[Dict] = None,
+                              aigc_meta: Optional[Dict] = None,
+                              download: bool = True, filename: Optional[str] = None) -> Optional[str]:
+        """一键生成换装图片"""
+        if not self._image_outfit_client:
+            raise Exception("图片换装模块未正确加载")
+        return self._image_outfit_client.generate_outfit_image(
+            model_url=model_url,
+            garment_url=garment_url,
+            return_url=return_url,
+            model_id=model_id,
+            garment_id=garment_id,
+            inference_config=inference_config,
+            logo_info=logo_info,
+            aigc_meta=aigc_meta,
+            download=download,
+            filename=filename
+        )
 
 
 def create_avatar(args):
@@ -1427,6 +1476,28 @@ def main():
     vv_query.add_argument('--filename', help='保存文件名（可选，默认为video_driven_<task_id>.mp4）')
     vv_query.set_defaults(func=vv_query_handler)
 
+    # === 图片换装 (io) ===
+    io_parser = subparsers.add_parser('io', help='图片换装生成')
+    io_subparsers = io_parser.add_subparsers(dest='io_action', help='图片换装操作')
+
+    # io generate - 一键生成换装图片
+    io_generate = io_subparsers.add_parser('generate', help='生成换装图片')
+    io_generate.add_argument('model_url', help='模特图片URL（需公网可访问）')
+    io_generate.add_argument('garment_url', help='服装图片URL（需公网可访问）')
+    io_generate.add_argument('--filename', help='保存文件名（可选，默认为outfit_<timestamp>.png）')
+    io_generate.add_argument('--no-download', action='store_true', help='不自动下载图片，只返回URL')
+    io_generate.add_argument('--model-id', default='1', help='模特ID（默认: 1）')
+    io_generate.add_argument('--garment-id', default='1', help='服装ID（默认: 1）')
+    io_generate.add_argument('--seed', type=int, help='随机种子参数（-1表示随机）')
+    io_generate.add_argument('--no-keep-head', action='store_false', dest='keep_head', help='不保持模特原图的头（包括发型）')
+    io_generate.add_argument('--no-keep-hand', action='store_false', dest='keep_hand', help='不保持模特原图的手')
+    io_generate.add_argument('--no-keep-foot', action='store_false', dest='keep_foot', help='不保持模特原图的足')
+    io_generate.add_argument('--keep-upper', action='store_true', help='保持模特原图的上装（默认不保持）')
+    io_generate.add_argument('--keep-lower', action='store_true', help='保持模特原图的下装（默认不保持）')
+    io_generate.add_argument('--no-sr', action='store_false', dest='do_sr', help='不对结果进行超分处理（默认启用）')
+    io_generate.add_argument('--num-steps', type=int, choices=range(25, 51), help='模型推理步数（25-50，默认: 50）')
+    io_generate.set_defaults(func=io_generate_handler)
+
     # === 即梦AI数字人 (jm) ===
     jm_parser = subparsers.add_parser('jm', help='即梦AI多功能生成平台')
     jm_subparsers = jm_parser.add_subparsers(dest='jm_action', help='即梦AI视频生成操作')
@@ -1521,6 +1592,11 @@ def main():
     elif args.command == 'vv':
         if not args.vv_action:
             vv_parser.print_help()
+            return
+        args.func(args)
+    elif args.command == 'io':
+        if not args.io_action:
+            io_parser.print_help()
             return
         args.func(args)
     elif args.command == 'jm':
@@ -1636,6 +1712,77 @@ def vv_query(args):
 
     except Exception as e:
         print(f"❌ 查询失败: {str(e)}")
+
+
+def io_generate_handler(args):
+    """处理图片换装生成命令"""
+    io_generate(args)
+
+
+def io_generate(args):
+    """生成图片换装"""
+    ai = VolcEngineAI()
+    try:
+        print(f"👗 开始图片换装生成")
+        print(f"👤 模特图片URL: {args.model_url}")
+        print(f"👔 服装图片URL: {args.garment_url}")
+
+        # 构建推理配置 - 只有明确指定时才覆盖默认值
+        inference_config = {}
+
+        if hasattr(args, 'seed') and args.seed is not None:
+            inference_config["seed"] = args.seed
+        if hasattr(args, 'keep_head') and not args.keep_head:
+            inference_config["keep_head"] = False
+        if hasattr(args, 'keep_hand') and not args.keep_hand:
+            inference_config["keep_hand"] = False
+        if hasattr(args, 'keep_foot') and not args.keep_foot:
+            inference_config["keep_foot"] = False
+        if hasattr(args, 'keep_upper') and args.keep_upper:
+            inference_config["keep_upper"] = True
+        if hasattr(args, 'keep_lower') and args.keep_lower:
+            inference_config["keep_lower"] = True
+        if hasattr(args, 'do_sr') and args.do_sr is not None:
+            inference_config["do_sr"] = args.do_sr
+        if hasattr(args, 'num_steps') and args.num_steps is not None:
+            inference_config["num_steps"] = args.num_steps
+
+        # 构建水印配置
+        logo_info = {
+            "add_logo": False,
+            "position": 0,
+            "language": 0
+        }
+
+        # AIGC隐式标识配置
+        aigc_meta = {
+            "content_producer": "volcengine_outfit",
+            "producer_id": f"outfit_{int(time.time())}",
+            "content_propagator": "volcengine",
+            "propagate_id": f"propagate_{int(time.time())}"
+        }
+
+        # 生成换装图片
+        result = ai.generate_outfit_image(
+            model_url=args.model_url,
+            garment_url=args.garment_url,
+            model_id=getattr(args, 'model_id', '1'),
+            garment_id=getattr(args, 'garment_id', '1'),
+            inference_config=inference_config,
+            logo_info=logo_info,
+            aigc_meta=aigc_meta,
+            download=not getattr(args, 'no_download', False),
+            filename=getattr(args, 'filename', None)
+        )
+
+        if result:
+            print("\n🎉 图片换装生成完成！")
+            print("=" * 50)
+            print(f"📄 结果文件: {result}")
+            print("=" * 50)
+
+    except Exception as e:
+        print(f"❌ 换装失败: {str(e)}")
 
 
 if __name__ == "__main__":

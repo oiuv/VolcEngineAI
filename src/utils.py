@@ -151,3 +151,46 @@ def get_output_resolution(mode: str, aspect_ratio: str = None) -> tuple:
         return (512, 512)
     else:
         return None  # 普通模式保持原图比例
+
+
+def download_image(url: str, filename: str) -> str:
+    """
+    下载图片文件
+
+    Args:
+        url: 图片URL
+        filename: 保存的文件名
+
+    Returns:
+        下载的文件名
+
+    Raises:
+        Exception: 下载失败
+    """
+    import requests
+    import os
+
+    try:
+        print(f"正在下载图片: {url}")
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+
+        # 确保目录存在
+        os.makedirs(os.path.dirname(filename) if os.path.dirname(filename) else '.', exist_ok=True)
+
+        with open(filename, 'wb') as f:
+            f.write(response.content)
+
+        print(f"✅ 图片已保存到: {filename}")
+        return filename
+
+    except requests.exceptions.Timeout:
+        raise Exception("下载超时，请检查网络连接")
+    except requests.exceptions.ConnectionError:
+        raise Exception("网络连接失败，请检查网络设置")
+    except requests.exceptions.HTTPError as e:
+        raise Exception(f"下载失败: HTTP {e.response.status_code}")
+    except requests.exceptions.RequestException as e:
+        raise Exception(f"下载失败: {str(e)}")
+    except IOError as e:
+        raise Exception(f"文件写入失败: {str(e)}")
