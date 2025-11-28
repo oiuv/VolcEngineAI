@@ -138,17 +138,23 @@ VolcEngineAI/
   - `vv query <task-id>`  # 查询任务状态
 
 ### 7. 图片换装 (ImageOutfitClient)
-- **服务标识**: dressing_diffusion
+- **服务标识**:
+  - V1版：dressing_diffusion（同步接口）
+  - V2版：dressing_diffusionV2（异步接口）
 - **功能特点**:
   - 输入模特图 + 服装图，输出模特穿着指定服装的图片
   - 支持复杂的模特pose和任意品类/款式的服装图输入
   - 支持非服饰和低质量的服饰输入，能合成真实的褶皱和光影
   - V1版同步接口，一次返回结果
+  - V2版异步接口，支持多件服装组合（上衣+下衣），丰富推理参数
 - **配置信息**:
   - 图片格式：JPG/JPEG/PNG/JFIF，小于5MB，小于4096*4096
   - 收费标准：1元/次，并发限制1
+  - V2版最多支持2件服装，支持服装类型分类（upper/bottom/full）
 - **命令结构**:
-  - `io generate <model_url> <garment_url>`  # 生成换装图片
+  - `io generate <model_url> <garment_url>`  # V1版生成换装图片
+  - `io generate <model_url> <garment_url> --version 2`  # V2版生成换装图片
+  - `io generate <model_url> "upper-url|bottom-url" --version 2 --garment-types upper bottom`  # V2版多件服装
 
 ### 8. 形象管理系统 (avatar_manager)
 - 本地JSON存储形象信息
@@ -405,6 +411,7 @@ from src.core.video_effect_client import VideoEffectClient
 - v2.0: 模块化架构统一，所有异步功能采用create+query组合模式
 - v2.1: 新增单图视频驱动功能(vv命令)和即梦AI动作模仿功能
 - v2.2: 新增图片换装功能(io命令)V1版
+- v2.3: 新增图片换装功能V2版，支持多件服装和异步处理
 
 ---
-*最后更新: 2025-11-20*
+*最后更新: 2025-11-28*

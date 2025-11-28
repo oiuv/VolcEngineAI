@@ -271,6 +271,63 @@ class VolcEngineAI:
             filename=filename
         )
 
+    def submit_outfit_task_v2(self, garment_urls: list, model_url: str = None,
+                             garment_types: list = None, model_id: str = None,
+                             protect_mask_url: str = None, inference_config: Optional[Dict] = None,
+                             req_image_store_type: int = 1, binary_data_base64: list = None) -> Dict[str, Any]:
+        """提交图片换装任务 (V2版)"""
+        if not self._image_outfit_client:
+            raise Exception("图片换装模块未正确加载")
+        return self._image_outfit_client.submit_outfit_task_v2(
+            garment_urls=garment_urls,
+            model_url=model_url,
+            garment_types=garment_types,
+            model_id=model_id,
+            protect_mask_url=protect_mask_url,
+            inference_config=inference_config,
+            req_image_store_type=req_image_store_type,
+            binary_data_base64=binary_data_base64
+        )
+
+    def query_outfit_task_v2(self, task_id: str, return_url: bool = True,
+                            logo_info: Optional[Dict] = None,
+                            aigc_meta: Optional[Dict] = None) -> Dict[str, Any]:
+        """查询图片换装任务状态 (V2版)"""
+        if not self._image_outfit_client:
+            raise Exception("图片换装模块未正确加载")
+        return self._image_outfit_client.query_outfit_task_v2(
+            task_id=task_id,
+            return_url=return_url,
+            logo_info=logo_info,
+            aigc_meta=aigc_meta
+        )
+
+    def generate_outfit_image_v2(self, garment_urls: list, model_url: str = None,
+                                garment_types: list = None, return_url: bool = True,
+                                model_id: str = None, protect_mask_url: str = None,
+                                inference_config: Optional[Dict] = None,
+                                logo_info: Optional[Dict] = None,
+                                aigc_meta: Optional[Dict] = None,
+                                download: bool = True, filename: Optional[str] = None,
+                                req_image_store_type: int = 1) -> Optional[str]:
+        """一键生成换装图片 (V2版)"""
+        if not self._image_outfit_client:
+            raise Exception("图片换装模块未正确加载")
+        return self._image_outfit_client.generate_outfit_image_v2(
+            garment_urls=garment_urls,
+            model_url=model_url,
+            garment_types=garment_types,
+            return_url=return_url,
+            model_id=model_id,
+            protect_mask_url=protect_mask_url,
+            inference_config=inference_config,
+            logo_info=logo_info,
+            aigc_meta=aigc_meta,
+            download=download,
+            filename=filename,
+            req_image_store_type=req_image_store_type
+        )
+
 
 def create_avatar(args):
     """创建形象（自动查询并等待完成）"""
@@ -1496,6 +1553,14 @@ def main():
     io_generate.add_argument('--keep-lower', action='store_true', help='保持模特原图的下装（默认不保持）')
     io_generate.add_argument('--no-sr', action='store_false', dest='do_sr', help='不对结果进行超分处理（默认启用）')
     io_generate.add_argument('--num-steps', type=int, choices=range(25, 51), help='模型推理步数（25-50，默认: 50）')
+    io_generate.add_argument('--version', choices=['1', '2'], default='1', help='API版本选择（1: V1版同步接口, 2: V2版异步接口，默认: 1）')
+    io_generate.add_argument('--garment-types', nargs='+', help='服装类型列表（V2版专用，取值: upper/bottom/full，用空格分隔）')
+    io_generate.add_argument('--protect-mask-url', help='模特保护区域图URL（V2版专用，PNG格式）')
+    io_generate.add_argument('--tight-mask', choices=['tight', 'loose', 'bbox'], default='loose', help='模特图遮挡区域范围（V2版专用，默认: loose）')
+    io_generate.add_argument('--p-bbox-iou-ratio', type=float, help='bbox与主体相交比例（V2版专用，范围: [0, 1.0]，默认: 0.3）')
+    io_generate.add_argument('--p-bbox-expand-ratio', type=float, help='bbox扩大比例（V2版专用，范围: [1.0, 1.5]，默认: 1.1）')
+    io_generate.add_argument('--max-process-side-length', type=int, help='最大边长（V2版专用，范围: [1080, 4096]，默认: 1920）')
+    io_generate.add_argument('--req-image-store-type', type=int, choices=[0, 1], default=1, help='图片传入方式（0:base64, 1:URL，默认: 1）')
     io_generate.set_defaults(func=io_generate_handler)
 
     # === 即梦AI数字人 (jm) ===
@@ -1723,57 +1788,137 @@ def io_generate(args):
     """生成图片换装"""
     ai = VolcEngineAI()
     try:
-        print(f"👗 开始图片换装生成")
-        print(f"👤 模特图片URL: {args.model_url}")
-        print(f"👔 服装图片URL: {args.garment_url}")
+        version = getattr(args, 'version', '1')
+        print(f"👗 开始图片换装生成 (V{version}版)")
 
-        # 构建推理配置 - 只有明确指定时才覆盖默认值
-        inference_config = {}
+        if version == '2':
+            # V2版：支持多件服装
+            print(f"👤 模特图片URL: {args.model_url}")
 
-        if hasattr(args, 'seed') and args.seed is not None:
-            inference_config["seed"] = args.seed
-        if hasattr(args, 'keep_head') and not args.keep_head:
-            inference_config["keep_head"] = False
-        if hasattr(args, 'keep_hand') and not args.keep_hand:
-            inference_config["keep_hand"] = False
-        if hasattr(args, 'keep_foot') and not args.keep_foot:
-            inference_config["keep_foot"] = False
-        if hasattr(args, 'keep_upper') and args.keep_upper:
-            inference_config["keep_upper"] = True
-        if hasattr(args, 'keep_lower') and args.keep_lower:
-            inference_config["keep_lower"] = True
-        if hasattr(args, 'do_sr') and args.do_sr is not None:
-            inference_config["do_sr"] = args.do_sr
-        if hasattr(args, 'num_steps') and args.num_steps is not None:
-            inference_config["num_steps"] = args.num_steps
+            # 解析服装URL列表
+            garment_urls = args.garment_url.split('|') if '|' in args.garment_url else [args.garment_url]
+            print(f"👔 服装图片URL: {garment_urls}")
 
-        # 构建水印配置
-        logo_info = {
-            "add_logo": False,
-            "position": 0,
-            "language": 0
-        }
+            # 解析服装类型
+            garment_types = getattr(args, 'garment_types', None)
+            if garment_types and len(garment_types) != len(garment_urls):
+                raise ValueError(f"服装类型数量({len(garment_types)})与服装图片数量({len(garment_urls)})不匹配")
 
-        # AIGC隐式标识配置
-        aigc_meta = {
-            "content_producer": "volcengine_outfit",
-            "producer_id": f"outfit_{int(time.time())}",
-            "content_propagator": "volcengine",
-            "propagate_id": f"propagate_{int(time.time())}"
-        }
+            if garment_types:
+                print(f"🏷️ 服装类型: {garment_types}")
 
-        # 生成换装图片
-        result = ai.generate_outfit_image(
-            model_url=args.model_url,
-            garment_url=args.garment_url,
-            model_id=getattr(args, 'model_id', '1'),
-            garment_id=getattr(args, 'garment_id', '1'),
-            inference_config=inference_config,
-            logo_info=logo_info,
-            aigc_meta=aigc_meta,
-            download=not getattr(args, 'no_download', False),
-            filename=getattr(args, 'filename', None)
-        )
+            # 构建推理配置 - 只有明确指定时才覆盖默认值
+            inference_config = {}
+
+            if hasattr(args, 'seed') and args.seed is not None:
+                inference_config["seed"] = args.seed
+            if hasattr(args, 'keep_head') and not args.keep_head:
+                inference_config["keep_head"] = False
+            if hasattr(args, 'keep_hand') and not args.keep_hand:
+                inference_config["keep_hand"] = False
+            if hasattr(args, 'keep_foot') and not args.keep_foot:
+                inference_config["keep_foot"] = False
+            if hasattr(args, 'keep_upper') and args.keep_upper:
+                inference_config["keep_upper"] = True
+            if hasattr(args, 'keep_lower') and args.keep_lower:
+                inference_config["keep_lower"] = True
+            if hasattr(args, 'do_sr') and args.do_sr is not None:
+                inference_config["do_sr"] = args.do_sr
+            if hasattr(args, 'num_steps') and args.num_steps is not None:
+                inference_config["num_steps"] = args.num_steps
+
+            # V2版专用参数
+            if hasattr(args, 'tight_mask') and args.tight_mask != 'loose':
+                inference_config["tight_mask"] = args.tight_mask
+            if hasattr(args, 'p_bbox_iou_ratio') and args.p_bbox_iou_ratio is not None:
+                inference_config["p_bbox_iou_ratio"] = args.p_bbox_iou_ratio
+            if hasattr(args, 'p_bbox_expand_ratio') and args.p_bbox_expand_ratio is not None:
+                inference_config["p_bbox_expand_ratio"] = args.p_bbox_expand_ratio
+            if hasattr(args, 'max_process_side_length') and args.max_process_side_length is not None:
+                inference_config["max_process_side_length"] = args.max_process_side_length
+
+            # 构建水印配置
+            logo_info = {
+                "add_logo": False,
+                "position": 0,
+                "language": 0,
+                "opacity": 1.0
+            }
+
+            # AIGC隐式标识配置
+            aigc_meta = {
+                "content_producer": "volcengine_outfit_v2",
+                "producer_id": f"outfit_v2_{int(time.time())}",
+                "content_propagator": "volcengine",
+                "propagate_id": f"propagate_v2_{int(time.time())}"
+            }
+
+            # 生成V2版换装图片
+            result = ai.generate_outfit_image_v2(
+                garment_urls=garment_urls,
+                model_url=args.model_url,
+                garment_types=garment_types,
+                model_id=getattr(args, 'model_id', None),
+                protect_mask_url=getattr(args, 'protect_mask_url', None),
+                inference_config=inference_config,
+                logo_info=logo_info,
+                aigc_meta=aigc_meta,
+                download=not getattr(args, 'no_download', False),
+                filename=getattr(args, 'filename', None),
+                req_image_store_type=getattr(args, 'req_image_store_type', 1)
+            )
+        else:
+            # V1版：单件服装
+            print(f"👤 模特图片URL: {args.model_url}")
+            print(f"👔 服装图片URL: {args.garment_url}")
+
+            # 构建推理配置 - 只有明确指定时才覆盖默认值
+            inference_config = {}
+
+            if hasattr(args, 'seed') and args.seed is not None:
+                inference_config["seed"] = args.seed
+            if hasattr(args, 'keep_head') and not args.keep_head:
+                inference_config["keep_head"] = False
+            if hasattr(args, 'keep_hand') and not args.keep_hand:
+                inference_config["keep_hand"] = False
+            if hasattr(args, 'keep_foot') and not args.keep_foot:
+                inference_config["keep_foot"] = False
+            if hasattr(args, 'keep_upper') and args.keep_upper:
+                inference_config["keep_upper"] = True
+            if hasattr(args, 'keep_lower') and args.keep_lower:
+                inference_config["keep_lower"] = True
+            if hasattr(args, 'do_sr') and args.do_sr is not None:
+                inference_config["do_sr"] = args.do_sr
+            if hasattr(args, 'num_steps') and args.num_steps is not None:
+                inference_config["num_steps"] = args.num_steps
+
+            # 构建水印配置
+            logo_info = {
+                "add_logo": False,
+                "position": 0,
+                "language": 0
+            }
+
+            # AIGC隐式标识配置
+            aigc_meta = {
+                "content_producer": "volcengine_outfit",
+                "producer_id": f"outfit_{int(time.time())}",
+                "content_propagator": "volcengine",
+                "propagate_id": f"propagate_{int(time.time())}"
+            }
+
+            # 生成V1版换装图片
+            result = ai.generate_outfit_image(
+                model_url=args.model_url,
+                garment_url=args.garment_url,
+                model_id=getattr(args, 'model_id', '1'),
+                garment_id=getattr(args, 'garment_id', '1'),
+                inference_config=inference_config,
+                logo_info=logo_info,
+                aigc_meta=aigc_meta,
+                download=not getattr(args, 'no_download', False),
+                filename=getattr(args, 'filename', None)
+            )
 
         if result:
             print("\n🎉 图片换装生成完成！")

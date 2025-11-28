@@ -25,6 +25,9 @@
 ### 7. 图片换装
 基于用户输入的服装图片，更换到指定的模特图上。即输入服装图 + 模特图，输出模特穿着指定服装的照片。支持复杂的模特pose和任意品类/款式的服装图输入，能够合成真实的褶皱和光影效果。
 
+- **V1版**：同步接口，单件服装，快速响应
+- **V2版**：异步接口，支持多件服装组合（上衣+下衣），丰富的推理参数
+
 ## 驱动模式说明
 
 ### 单图音频驱动模式
@@ -345,6 +348,8 @@ python volcengine_ai.py vv query "任务ID" --filename "我的驱动视频.mp4"
 ## 图片换装
 
 ### 生成图片换装
+
+#### V1版 - 同步接口（单件服装）
 ```bash
 # 基础用法
 python volcengine_ai.py io generate "模特图片URL" "服装图片URL"
@@ -362,29 +367,70 @@ python volcengine_ai.py io generate "模特图片URL" "服装图片URL" --seed 1
 python volcengine_ai.py io generate "模特图片URL" "服装图片URL" --keep-head --keep-hand --keep-foot
 ```
 
+#### V2版 - 异步接口（支持多件服装）
+```bash
+# V2版单件服装
+python volcengine_ai.py io generate "模特图片URL" "服装图片URL" --version 2
+
+# V2版多件服装（上衣+下衣）
+python volcengine_ai.py io generate "模特图片URL" "上衣URL|下衣URL" --version 2 --garment-types upper bottom
+
+# V2版自定义推理参数
+python volcengine_ai.py io generate "模特图片URL" "服装URL" --version 2 --num-steps 20 --tight-mask bbox
+
+# V2版保护区域配置
+python volcengine_ai.py io generate "模特图片URL" "服装URL" --version 2 --protect-mask-url "保护区域图URL"
+```
+
+### 版本对比
+
+| 特性 | V1版 | V2版 |
+|------|------|------|
+| 接口类型 | 同步 | 异步 |
+| 响应时间 | 快速 | 需等待任务完成 |
+| 服装数量 | 单件 | 最多2件（上衣+下衣） |
+| 服装类型 | 无需分类 | 支持分类（upper/bottom/full） |
+| 推理参数 | 基础参数 | 丰富参数配置 |
+| 保护区域 | 不支持 | 支持保护区域图 |
+| 处理模式 | CVProcess | CVSubmitTask + CVGetResult |
+
 ### 图片换装参数说明
 
 #### 基本参数
 - `model_url`: 模特图片URL（必选）
-- `garment_url`: 服装图片URL（必选）
+- `garment_url`: 服装图片URL（必选，V2版支持多个URL用|分隔）
 
-#### 可选参数
+#### 版本控制
+- `--version`: API版本选择（1: V1版同步接口, 2: V2版异步接口，默认: 1）
+
+#### 通用可选参数
 - `--filename`: 保存文件名
 - `--no-download`: 不自动下载图片，只返回URL
-- `--model-id`: 模特ID（默认: 1）
-- `--garment-id`: 服装ID（默认: 1）
+- `--model-id`: 模特ID（V1版默认: 1）
+- `--garment-id`: 服装ID（V1版默认: 1）
 
-#### 推理配置
+#### 通用推理配置
 - `--seed`: 随机种子参数（-1表示随机）
-- `--num-steps`: 模型推理步数（25-50，默认: 50）
+- `--num-steps`: 模型推理步数
+  - V1版：25-50（默认: 50）
+  - V2版：8-50（默认: 16）
 - `--no-sr`: 不对结果进行超分处理
 
-#### 保护区域
+#### 通用保护区域
 - `--keep-head`: 保持模特原图的头（包括发型）
-- `--keep-hand`: 保持模特原图的手
-- `--keep-foot`: 保持模特原图的足
+- `--no-keep-hand`: 不保持模特原图的手（V2版默认不保持）
+- `--no-keep-foot`: 不保持模特原图的足（V2版默认不保持）
 - `--keep-upper`: 保持模特原图的上装
 - `--keep-lower`: 保持模特原图的下装
+
+#### V2版专用参数
+- `--garment-types`: 服装类型列表（取值: upper/bottom/full，用空格分隔）
+- `--protect-mask-url`: 模特保护区域图URL（PNG格式）
+- `--tight-mask`: 模特图遮挡区域范围（tight/loose/bbox，默认: loose）
+- `--p-bbox-iou-ratio`: bbox与主体相交比例（范围: [0, 1.0]，默认: 0.3）
+- `--p-bbox-expand-ratio`: bbox扩大比例（范围: [1.0, 1.5]，默认: 1.1）
+- `--max-process-side-length`: 最大边长（范围: [1080, 4096]，默认: 1920）
+- `--req-image-store-type`: 图片传入方式（0:base64, 1:URL，默认: 1）
 
 ## 特效视频模板分类
 
